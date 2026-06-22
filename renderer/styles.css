@@ -664,50 +664,89 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
 }
 
-/* ── Audience detail ──────────────────────────── */
+/* ── Audience grid ───────────────────────────── */
+.audience-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  padding: 20px 32px 60px;
+}
+
+@media (max-width: 900px) {
+  .audience-grid { grid-template-columns: 1fr; }
+}
+
 .ms-card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 18px;
-  margin-top: 18px;
   overflow: hidden;
+  break-inside: avoid;
 }
 
-.ms-card:first-child {
-  margin-top: 36px;
+.ms-card:has(.ms-card-body.open) {
+  grid-column: span 2;
 }
 
 .ms-card-header {
-  padding: 14px 16px;
-  cursor: pointer;
+  padding: 20px 22px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
 }
 
-.ms-card-header:hover { background: var(--bg-soft); }
+.ms-card-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ms-card-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ms-card-desc {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.ms-card-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ms-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
 .ms-card-body {
-  padding: 0 16px 16px;
+  padding: 0 22px 24px;
   display: none;
 }
 
 .ms-card-body.open { display: block; }
 
-.ms-section { margin-bottom: 14px; }
+.ms-section { margin-bottom: 20px; }
+.ms-section:last-child { margin-bottom: 0; }
 .ms-section h5 {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--accent-2);
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-weight: 700;
 }
 
 .ms-section p, .ms-section li {
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.6;
   color: var(--text-soft);
   margin: 0;
 }
@@ -716,7 +755,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .pyramid-level .lvl {
@@ -730,7 +769,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   font-size: 12.5px;
 }
 

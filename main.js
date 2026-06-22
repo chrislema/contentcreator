@@ -41,7 +41,19 @@ function seedIfNeeded() {
     platformProfilesStore.setAll([seed.PLATFORM_PROFILE]);
   }
   if (audiencesStore.list().length === 0) {
-    audiencesStore.setAll(seed.AUDIENCES);
+    // Flatten seed data: each microSegment becomes a standalone audience
+    const flatAudiences = [];
+    for (const doc of seed.AUDIENCES) {
+      for (const ms of (doc.microSegments || [])) {
+        flatAudiences.push({
+          ...ms,
+          source: doc.name,
+          id: ms.id || makeId()
+        });
+      }
+    }
+    // If seed had no nesting (already flat), use as-is
+    audiencesStore.setAll(flatAudiences.length > 0 ? flatAudiences : seed.AUDIENCES);
   }
 }
 
@@ -315,10 +327,16 @@ ipcMain.handle('import:file', async (_e, type) => {
   const filename = path.basename(filePath);
 
   if (type === 'audience') {
-    const profile = parseAudienceMarkdown(text, filename);
-    audiencesStore.add(profile);
-    status(`Imported audience: ${profile.name} (${profile.microSegments.length} segments)`);
-    return profile;
+    const audiences = parseAudienceMarkdown(text, filename);
+    if (!audiences || audiences.length === 0) {
+      status('No audience segments found in file');
+      return null;
+    }
+    for (const aud of audiences) {
+      audiencesStore.add(aud);
+    }
+    status(`Imported ${audiences.length} audience segments from ${filename}`);
+    return audiences[0];
   }
   if (type === 'voice') {
     const vp = parseVoiceProfileMarkdown(text);
@@ -371,14 +389,14 @@ ipcMain.handle('topics:generate', async (_e, modelId) => {
   const audiences = audiencesStore.list();
   const existingTopics = topicsStore.list();
 
-  const segments = [];
-  for (const aud of audiences) {
-    for (const ms of aud.microSegments || []) {
-      segments.push({ name: ms.name, audience: aud.name, pains: (ms.invertedPainPyramid || []).map((p) => p.pain), goals: ms.goalPyramid });
-    }
-  }
+  const segments = audiences.map((aud) => ({
+    id: aud.id,
+    name: aud.name,
+    pains: (aud.invertedPainPyramid || []).map((p) => p.pain),
+    goals: aud.goalPyramid
+  }));
 
-  const sysPrompt = `You are a content strategist generating topic ideas. Here are the target audience micro-segments:\n${segments.map((s, i) => `${i + 1}. ${s.name} (${s.audience}): Key pains: ${s.pains.join('; ')}. Base goal: ${s.goals?.level1 || ''}`).join('\n')}\n\nExisting topics already covered: ${existingTopics.map((t) => t.title).join(', ') || 'none'}\n\nGenerate 5 new topic ideas as JSON array. Each topic: {"title": "...", "angle": "...", "target": "segment name", "cmsTags": ["tag1","tag2"], "priority": 1-5}. Return ONLY valid JSON.`;
+  const sysPrompt = `You are a content strategist generating topic ideas. Here are the target audience micro-segments:\n${segments.map((s, i) => `${i + 1}. ${s.name}: Key pains: ${s.pains.join('; ')}. Base goal: ${s.goals?.level1 || ''}`).join('\n')}\n\nExisting topics already covered: ${existingTopics.map((t) => t.title).join(', ') || 'none'}\n\nGenerate 5 new topic ideas as JSON array. Each topic: {"title": "...", "angle": "...", "target": "segment name", "cmsTags": ["tag1","tag2"], "priority": 1-5}. Return ONLY valid JSON.`;
 
   const messages = [
     { role: 'system', content: sysPrompt },
@@ -404,7 +422,7 @@ ipcMain.handle('topics:generate', async (_e, modelId) => {
       title: t.title,
       angle: t.angle,
       target: t.target,
-      targetAudience: audiences.find((a) => a.microSegments.some((m) => m.name === t.target))?.id || '',
+      targetAudience: audiences.find((a) => a.name === t.target)?.id || '',
       cmsTags: t.cmsTags || [],
       priority: t.priority || 3,
       status: 'idea',
@@ -457,10 +475,7 @@ ipcMain.handle('drafts:generate', async (_e, draftId, userMessage) => {
 
   // Load context
   const segment = draft.segmentId
-    ? (() => {
-        const aud = audiencesStore.list().find((a) => a.microSegments.some((m) => m.id === draft.segmentId));
-        return aud?.microSegments?.find((m) => m.id === draft.segmentId);
-      })()
+    ? audiencesStore.get(draft.segmentId)
     : null;
 
   const frameworkIds = draft.frameworkIds || [];

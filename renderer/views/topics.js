@@ -54,13 +54,11 @@ CC.views.topics = {
   },
 
   getAllSegments() {
-    const segments = [];
-    for (const aud of CC.state.audiences || []) {
-      for (const ms of aud.microSegments || []) {
-        segments.push({ name: ms.name, audienceId: aud.id, msId: ms.id });
-      }
-    }
-    return segments;
+    return (CC.state.audiences || []).map((aud) => ({
+      name: aud.name,
+      audienceId: aud.id,
+      msId: aud.id
+    }));
   },
 
   renderCard(t) {
