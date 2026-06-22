@@ -255,8 +255,11 @@ CC.views.settings = {
 
   renderModelChat(models) {
     const history = this.modelChatHistory || [];
-    const selectedModel = this.modelChatModelId || (models[0] && models[0].id) || '';
+    const workingModels = models.filter((m) => m.lastTestResult);
+    const selectedModel = this.modelChatModelId || (workingModels[0] && workingModels[0].id) || (models[0] && models[0].id) || '';
     const modelName = models.find((m) => m.id === selectedModel)?.displayName || models[0]?.displayName || 'None';
+    const modelCount = models.length;
+    const workingCount = workingModels.length;
 
     return `<div class="mcp-chat">
       <div class="mcp-chat-messages" id="model-chat-messages">
@@ -274,10 +277,14 @@ CC.views.settings = {
           <span class="mcp-chat-meta-label">Model</span>
           <span class="mcp-chat-meta-value">${CC.escapeHtml(modelName)}</span>
         </div>
+        <span class="badge ${workingCount > 0 ? 'ok' : 'dim'}">${workingCount}/${modelCount} working</span>
         ${history.length > 0 ? '<button class="mcp-chat-clear" id="model-chat-clear">Clear chat</button>' : ''}
       </div>
       <select id="model-chat-model-select" class="hidden">
-        ${models.map((m) => `<option value="${m.id}" ${m.id === selectedModel ? 'selected' : ''}>${CC.escapeHtml(m.displayName || m.model)}</option>`).join('')}
+        ${models.map((m) => {
+          const status = m.lastTested ? (m.lastTestResult ? ' (working)' : ' (failed)') : ' (untested)';
+          return `<option value="${m.id}" ${m.id === selectedModel ? 'selected' : ''}>${CC.escapeHtml((m.displayName || m.model) + status)}</option>`;
+        }).join('')}
       </select>
     </div>`;
   },
