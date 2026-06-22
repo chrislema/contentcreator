@@ -34,7 +34,10 @@ contextBridge.exposeInMainWorld('api', {
     list: () => ipcRenderer.invoke('mcps:list'),
     add: (mcp) => ipcRenderer.invoke('mcps:add', mcp),
     update: (id, patch) => ipcRenderer.invoke('mcps:update', id, patch),
-    remove: (id) => ipcRenderer.invoke('mcps:remove', id)
+    remove: (id) => ipcRenderer.invoke('mcps:remove', id),
+    connect: (id) => ipcRenderer.invoke('mcps:connect', id),
+    disconnect: (id) => ipcRenderer.invoke('mcps:disconnect', id),
+    query: (mcpId, query, modelId) => ipcRenderer.invoke('mcps:query', mcpId, query, modelId)
   },
 
   // Anti-AI

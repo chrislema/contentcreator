@@ -371,10 +371,8 @@ CC.views.settings = {
   // ── MCPs ────────────────────────────────
   renderMcps() {
     const mcps = CC.state.mcps || [];
-    return `<div style="margin-bottom:16px">
-      <button class="btn-primary btn-sm" id="mcp-add">+ Add MCP</button>
-    </div>
-    <div id="mcp-form" class="hidden" style="max-width:520px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px">
+    return `<button class="btn-primary btn-sm" id="mcp-add" style="margin-bottom:28px">+ Add MCP</button>
+    <div id="mcp-form" class="hidden" style="max-width:520px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px">
       <div class="form-group">
         <label>Name</label>
         <input id="mcp-name" type="text" placeholder="Payload CMS" />
@@ -400,34 +398,138 @@ CC.views.settings = {
         <button class="btn-ghost btn-sm" id="mcp-cancel">Cancel</button>
       </div>
     </div>
-    ${mcps.length === 0 ? CC.empty('No MCPs connected.', 'Add connections to your CMS, newsletter, analytics, etc.') : mcps.map((m) => `
-      <div class="list-item">
-        <div class="list-item-info">
-          <div class="list-item-title">${CC.escapeHtml(m.name)}</div>
-          <div class="list-item-sub">${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}</div>
+    ${mcps.length === 0 ? CC.empty('No MCPs connected.', 'Add connections to your CMS, newsletter, analytics, etc.') : mcps.map((m) => this.renderMcpCard(m)).join('')}
+    ${mcps.length > 0 ? this.renderTestPrompt(mcps) : ''}`;
+  },
+
+  renderMcpCard(m) {
+    const connected = m.connected;
+    const toolCount = m.toolCount || 0;
+    const statusBadge = connected
+      ? `<span class="badge ok">Connected</span>`
+      : `<span class="badge dim">Not connected</span>`;
+
+    return `<div class="list-item" style="flex-wrap:wrap">
+      <div class="list-item-info" style="flex:1;min-width:200px">
+        <div class="list-item-title">${CC.escapeHtml(m.name)} ${statusBadge}</div>
+        <div class="list-item-sub">
+          ${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}
+          ${connected ? ` &middot; <span style="color:var(--accent)">${toolCount} tools</span>` : ''}
+          ${m.lastError ? ` &middot; <span style="color:var(--danger)">${CC.escapeHtml(m.lastError)}</span>` : ''}
         </div>
-        <div class="list-item-actions">
-          <button class="btn-danger btn-sm" data-mcp-remove="${m.id}">Disconnect</button>
-        </div>
+        ${connected && m.tools && m.tools.length ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${m.tools.slice(0, 8).map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t.name)}</span>`).join('')}${m.tools.length > 8 ? `<span class="badge dim" style="font-size:10.5px">+${m.tools.length - 8} more</span>` : ''}</div>` : ''}
       </div>
-    `).join('')}`;
+      <div class="list-item-actions" style="flex-shrink:0">
+        ${connected
+          ? `<button class="btn-danger btn-sm" data-mcp-disconnect="${m.id}">Disconnect</button>`
+          : `<button class="btn-primary btn-sm" data-mcp-connect="${m.id}">Connect</button>`
+        }
+        <button class="btn-ghost btn-sm" data-mcp-edit="${m.id}">Edit</button>
+        <button class="btn-ghost btn-sm" data-mcp-remove="${m.id}">Remove</button>
+      </div>
+    </div>`;
+  },
+
+  renderTestPrompt(mcps) {
+    const connectedMcps = mcps.filter((m) => m.connected);
+    return `<div style="margin-top:28px;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius)">
+      <h3 style="margin:0 0 4px;font-size:14px">Test MCP Connection</h3>
+      <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">Ask a question using your connected MCPs. The model will pick the right tool and execute.</p>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <select id="mcp-test-select" style="flex:0 0 auto;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;color:var(--text);outline:none;font-family:inherit">
+          ${connectedMcps.length > 0
+            ? connectedMcps.map((m) => `<option value="${m.id}">${CC.escapeHtml(m.name)}</option>`).join('')
+            : '<option value="">No connected MCPs</option>'
+          }
+        </select>
+      </div>
+      <textarea id="mcp-test-input" rows="2" placeholder="Use payload cms to give me the title of my last post" style="width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;font-family:inherit;resize:vertical;outline:none;background:#fff"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <span id="mcp-test-status" style="font-size:12px;color:var(--muted)"></span>
+        <button class="btn-primary btn-sm" id="mcp-test-run" ${connectedMcps.length === 0 ? 'disabled' : ''}>Run Query</button>
+      </div>
+      <div id="mcp-test-result" class="hidden" style="margin-top:14px;padding:14px;background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13.5px;line-height:1.6;white-space:pre-wrap;color:var(--text);max-height:300px;overflow-y:auto"></div>
+    </div>`;
   },
 
   initMcps() {
     const form = document.getElementById('mcp-form');
-    document.getElementById('mcp-add')?.addEventListener('click', () => form.classList.toggle('hidden'));
+    document.getElementById('mcp-add')?.addEventListener('click', () => {
+      form.classList.toggle('hidden');
+      if (!form.classList.contains('hidden')) {
+        delete form.dataset.editId;
+        form.querySelector('#mcp-name').value = '';
+        form.querySelector('#mcp-url').value = '';
+        form.querySelector('#mcp-token').value = '';
+        document.getElementById('mcp-save').textContent = 'Save';
+      }
+    });
     document.getElementById('mcp-cancel')?.addEventListener('click', () => form.classList.add('hidden'));
 
     document.getElementById('mcp-save')?.addEventListener('click', async () => {
-      await CC.api.mcps.add({
+      const editId = form.dataset.editId;
+      const payload = {
         name: document.getElementById('mcp-name').value,
         url: document.getElementById('mcp-url').value,
         authType: document.getElementById('mcp-authType').value,
         token: document.getElementById('mcp-token').value,
         active: true
-      });
+      };
+      if (editId) {
+        payload.connected = false;
+        payload.toolCount = 0;
+        payload.tools = [];
+        delete payload.active;
+        await CC.api.mcps.update(editId, payload);
+        delete form.dataset.editId;
+        document.getElementById('mcp-save').textContent = 'Save';
+      } else {
+        payload.connected = false;
+        payload.toolCount = 0;
+        payload.tools = [];
+        await CC.api.mcps.add(payload);
+      }
       await CC.refresh('mcps');
       CC.navigate('settings');
+    });
+
+    document.querySelectorAll('[data-mcp-edit]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mcp = CC.state.mcps.find((m) => m.id === btn.dataset.mcpEdit);
+        if (!mcp) return;
+        form.classList.remove('hidden');
+        form.dataset.editId = mcp.id;
+        document.getElementById('mcp-name').value = mcp.name || '';
+        document.getElementById('mcp-url').value = mcp.url || '';
+        document.getElementById('mcp-authType').value = mcp.authType || 'bearer';
+        document.getElementById('mcp-token').value = mcp.token || '';
+        document.getElementById('mcp-save').textContent = 'Update';
+        form.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+
+    document.querySelectorAll('[data-mcp-connect]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Connecting...';
+        try {
+          await CC.api.mcps.connect(btn.dataset.mcpConnect);
+          await CC.refresh('mcps');
+          CC.navigate('settings');
+        } catch (e) {
+          CC.showStatus('Connection failed: ' + e.message);
+          await CC.refresh('mcps');
+          CC.navigate('settings');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-mcp-disconnect]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await CC.api.mcps.disconnect(btn.dataset.mcpDisconnect);
+        await CC.refresh('mcps');
+        CC.navigate('settings');
+      });
     });
 
     document.querySelectorAll('[data-mcp-remove]').forEach((btn) => {
@@ -436,6 +538,48 @@ CC.views.settings = {
         await CC.refresh('mcps');
         CC.navigate('settings');
       });
+    });
+
+    // Test prompt handler
+    document.getElementById('mcp-test-run')?.addEventListener('click', async () => {
+      const select = document.getElementById('mcp-test-select');
+      const input = document.getElementById('mcp-test-input');
+      const statusEl = document.getElementById('mcp-test-status');
+      const resultEl = document.getElementById('mcp-test-result');
+      const btn = document.getElementById('mcp-test-run');
+
+      const mcpId = select.value;
+      const query = input.value.trim();
+      if (!mcpId || !query) return;
+
+      const models = CC.state.models || [];
+      if (models.length === 0) {
+        statusEl.textContent = 'Add a model in Settings > Models first';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      statusEl.textContent = 'Querying...';
+      resultEl.classList.add('hidden');
+
+      try {
+        const result = await CC.api.mcps.query(mcpId, query, models[0].id);
+        if (result.error) {
+          resultEl.textContent = result.error;
+        } else if (result.formatted) {
+          resultEl.textContent = `Tool: ${result.tool}\n\n${result.formatted}`;
+        } else {
+          resultEl.textContent = JSON.stringify(result, null, 2);
+        }
+        resultEl.classList.remove('hidden');
+        statusEl.textContent = '';
+      } catch (e) {
+        statusEl.textContent = 'Failed: ' + e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Query';
+      }
     });
   },
 

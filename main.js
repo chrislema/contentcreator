@@ -6,6 +6,7 @@ const { createCollection, createDocument } = require('./lib/store');
 const seed = require('./lib/seedData');
 const { parseAudienceMarkdown, parseVoiceProfileMarkdown, parsePlatformProfileMarkdown, makeId } = require('./lib/parser');
 const { buildDraftSystemPrompt, chatCompletion } = require('./lib/modelClient');
+const { connectMcp, queryMcp } = require('./lib/mcpClient');
 
 let win;
 
@@ -162,6 +163,55 @@ ipcMain.handle('mcps:remove', (_e, id) => {
   settingsStore.patch({ mcps });
   status('MCP removed');
   return mcps;
+});
+ipcMain.handle('mcps:connect', async (_e, id) => {
+  const s = settingsStore.get();
+  const mcp = (s.mcps || []).find((m) => m.id === id);
+  if (!mcp) throw new Error('MCP not found');
+
+  status(`Connecting to ${mcp.name}...`);
+  try {
+    const result = await connectMcp(mcp);
+    // Update MCP record with connection status and tools
+    const mcps = (s.mcps || []).map((m) =>
+      m.id === id ? { ...m, connected: true, toolCount: result.toolCount, tools: result.tools, lastConnected: new Date().toISOString() } : m
+    );
+    settingsStore.patch({ mcps });
+    status(`Connected to ${mcp.name}: ${result.toolCount} tools available`);
+    return result;
+  } catch (e) {
+    // Mark as disconnected
+    const mcps = (s.mcps || []).map((m) =>
+      m.id === id ? { ...m, connected: false, toolCount: 0, tools: [], lastError: e.message } : m
+    );
+    settingsStore.patch({ mcps });
+    status(`Connection failed: ${e.message}`);
+    throw e;
+  }
+});
+ipcMain.handle('mcps:disconnect', (_e, id) => {
+  const s = settingsStore.get();
+  const mcps = (s.mcps || []).map((m) =>
+    m.id === id ? { ...m, connected: false, toolCount: 0, tools: [] } : m
+  );
+  settingsStore.patch({ mcps });
+  const mcp = mcps.find((m) => m.id === id);
+  status(`Disconnected from ${mcp.name}`);
+  return mcps.find((m) => m.id === id);
+});
+ipcMain.handle('mcps:query', async (_e, mcpId, query, modelId) => {
+  const s = settingsStore.get();
+  const mcp = (s.mcps || []).find((m) => m.id === mcpId);
+  if (!mcp) throw new Error('MCP not found');
+  if (!mcp.connected) throw new Error('MCP not connected. Click Connect first.');
+
+  const model = (s.models || []).find((m) => m.id === modelId);
+  if (!model) throw new Error('No model configured for query interpretation');
+
+  status(`Querying ${mcp.name}...`);
+  const result = await queryMcp(mcp, mcp.tools || [], query, model);
+  status(`Query complete`);
+  return result;
 });
 
 // ── IPC: Anti-AI Rules ───────────────────────────────────────────
