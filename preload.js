@@ -18,7 +18,8 @@ contextBridge.exposeInMainWorld('api', {
     list: () => ipcRenderer.invoke('models:list'),
     add: (model) => ipcRenderer.invoke('models:add', model),
     update: (id, patch) => ipcRenderer.invoke('models:update', id, patch),
-    remove: (id) => ipcRenderer.invoke('models:remove', id)
+    remove: (id) => ipcRenderer.invoke('models:remove', id),
+    test: (modelId, message) => ipcRenderer.invoke('models:test', modelId, message)
   },
 
   // Frameworks

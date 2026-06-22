@@ -804,3 +804,242 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   white-space: pre-wrap;
   color: var(--text);
 }
+
+/* ── MCP Cards ────────────────────────────────── */
+.mcp-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.mcp-section > #mcp-add,
+.mcp-section > #model-add {
+  align-self: flex-end;
+}
+
+.mcp-form {
+  max-width: 520px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-top: 24px;
+}
+
+.mcp-list {
+  margin-top: 40px;
+}
+
+.mcp-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+
+.mcp-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.mcp-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.mcp-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mcp-card-url {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.mcp-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── MCP Chat ─────────────────────────────────── */
+.mcp-chat {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+.mcp-chat-messages {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px 0 20px;
+}
+
+.mcp-chat-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.mcp-chat-empty span {
+  color: var(--text-soft);
+  font-style: italic;
+}
+
+.mcp-chat-user {
+  margin-bottom: 16px;
+}
+
+.mcp-chat-user-bubble {
+  background: var(--bg-soft);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.mcp-chat-assistant {
+  margin-bottom: 16px;
+  padding-left: 0;
+}
+
+.mcp-chat-tool {
+  margin-bottom: 6px;
+}
+
+.mcp-chat-assistant-text {
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.mcp-chat-system {
+  text-align: center;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mcp-chat-input-wrap {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+}
+
+.mcp-chat-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 12px 48px 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  min-height: 44px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.mcp-chat-input::placeholder {
+  color: var(--muted);
+}
+
+.mcp-chat-send {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.mcp-chat-send:hover {
+  background: var(--accent-2);
+  filter: none;
+}
+
+.mcp-chat-send:disabled {
+  background: var(--border-strong);
+  cursor: not-allowed;
+}
+
+.mcp-chat-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 0 0;
+  flex-wrap: wrap;
+}
+
+.mcp-chat-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+
+.mcp-chat-meta-item:hover {
+  border-color: var(--accent);
+}
+
+.mcp-chat-meta-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.mcp-chat-meta-value {
+  font-size: 12.5px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.mcp-chat-clear {
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 5px 8px;
+  margin-left: auto;
+}
+
+.mcp-chat-clear:hover {
+  color: var(--danger);
+  filter: none;
+}

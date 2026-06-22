@@ -113,6 +113,23 @@ ipcMain.handle('models:remove', (_e, id) => {
   status('Model removed');
   return models;
 });
+ipcMain.handle('models:test', async (_e, modelId, message) => {
+  const s = settingsStore.get();
+  const model = (s.models || []).find((m) => m.id === modelId);
+  if (!model) throw new Error('Model not found');
+
+  status('Testing model...');
+  try {
+    const response = await chatCompletion(model, [
+      { role: 'user', content: message || 'Say "Model connected and working" in one sentence.' }
+    ], 256);
+    status('Model test complete');
+    return { connected: true, response };
+  } catch (e) {
+    status('Model test failed: ' + e.message);
+    return { connected: false, error: e.message };
+  }
+});
 
 // ── IPC: Frameworks ──────────────────────────────────────────────
 ipcMain.handle('frameworks:list', () => frameworksStore.list());

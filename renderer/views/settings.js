@@ -164,80 +164,135 @@ CC.views.settings = {
   },
 
   // ── Models ───────────────────────────────
+  modelChatHistory: [],
+
   renderModels() {
     const models = CC.state.models || [];
-    return `<div style="margin-bottom:16px;display:flex;gap:10px">
+    return `<div class="mcp-section">
       <button class="btn-primary btn-sm" id="model-add">+ Add Model</button>
-    </div>
-    <div id="model-form" class="hidden" style="max-width:520px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Display Name</label>
-          <input id="m-displayName" type="text" placeholder="Claude Sonnet 4.5" />
+      <div id="model-form" class="hidden mcp-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Display Name</label>
+            <input id="m-displayName" type="text" placeholder="Claude Opus 4.8" />
+          </div>
+          <div class="form-group">
+            <label>Provider</label>
+            <select id="m-provider">
+              <option value="anthropic">Anthropic</option>
+              <option value="openai">OpenAI</option>
+              <option value="glm">GLM (Zhipu)</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
         </div>
         <div class="form-group">
-          <label>Provider</label>
-          <select id="m-provider">
-            <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
-            <option value="glm">GLM (Zhipu)</option>
-            <option value="custom">Custom</option>
+          <label>Model ID</label>
+          <input id="m-model" type="text" placeholder="claude-opus-4-8" />
+        </div>
+        <div class="form-group">
+          <label>Connection Type</label>
+          <select id="m-connectionType">
+            <option value="api-key">API Key</option>
+            <option value="oauth-cli">OAuth / CLI</option>
           </select>
         </div>
-      </div>
-      <div class="form-group">
-        <label>Model ID</label>
-        <input id="m-model" type="text" placeholder="claude-sonnet-4-5-20250514" />
-      </div>
-      <div class="form-group">
-        <label>Connection Type</label>
-        <select id="m-connectionType">
-          <option value="api-key">API Key</option>
-          <option value="oauth-cli">OAuth / CLI</option>
-        </select>
-      </div>
-      <div id="m-apikey-fields">
-        <div class="form-group">
-          <label>Base URL</label>
-          <input id="m-baseUrl" type="text" placeholder="https://api.anthropic.com" />
+        <div id="m-apikey-fields">
+          <div class="form-group">
+            <label>Base URL</label>
+            <input id="m-baseUrl" type="text" placeholder="https://api.anthropic.com" />
+          </div>
+          <div class="form-group">
+            <label>API Key</label>
+            <input id="m-apiKey" type="password" placeholder="sk-..." />
+          </div>
+        </div>
+        <div id="m-cli-fields" class="hidden">
+          <div class="form-group">
+            <label>CLI Command</label>
+            <input id="m-cliPath" type="text" placeholder="claude" />
+          </div>
         </div>
         <div class="form-group">
-          <label>API Key</label>
-          <input id="m-apiKey" type="password" placeholder="sk-..." />
+          <label>Max Output Tokens</label>
+          <input id="m-maxTokens" type="number" value="8192" />
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary btn-sm" id="m-save">Save Model</button>
+          <button class="btn-ghost btn-sm" id="m-cancel">Cancel</button>
         </div>
       </div>
-      <div id="m-cli-fields" class="hidden">
-        <div class="form-group">
-          <label>CLI Path</label>
-          <input id="m-cliPath" type="text" placeholder="/usr/local/bin/claude" />
+      <div class="mcp-list">
+        ${models.length === 0 ? CC.empty('No models configured.', 'Add an AI model to start generating content.') : models.map((m) => this.renderModelCard(m)).join('')}
+      </div>
+      ${models.length > 0 ? this.renderModelChat(models) : ''}
+    </div>`;
+  },
+
+  renderModelCard(m) {
+    const connType = m.connectionType === 'oauth-cli' ? 'OAuth/CLI' : 'API Key';
+    const tested = m.lastTested;
+    const statusBadge = tested
+      ? (m.lastTestResult ? '<span class="badge ok">Working</span>' : '<span class="badge" style="color:var(--danger);border-color:var(--danger)">Failed</span>')
+      : '<span class="badge dim">Untested</span>';
+
+    return `<div class="mcp-card">
+      <div class="mcp-card-top">
+        <div class="mcp-card-name">${CC.escapeHtml(m.displayName || m.model)} ${statusBadge}</div>
+        <div class="mcp-card-actions">
+          <button class="btn-primary btn-sm" data-model-test="${m.id}">Test</button>
+          <button class="btn-ghost btn-sm" data-model-edit="${m.id}">Edit</button>
+          <button class="btn-ghost btn-sm" data-model-remove="${m.id}">Remove</button>
         </div>
       </div>
-      <div class="form-group">
-        <label>Max Output Tokens</label>
-        <input id="m-maxTokens" type="number" value="8192" />
+      <div class="mcp-card-url">
+        ${CC.escapeHtml(m.provider)} &middot; ${CC.escapeHtml(m.model)} &middot; ${connType}
+        ${m.baseUrl ? `<br>${CC.escapeHtml(m.baseUrl)}` : ''}
+        ${m.cliPath ? `<br>CLI: ${CC.escapeHtml(m.cliPath)}` : ''}
       </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn-primary btn-sm" id="m-save">Save Model</button>
-        <button class="btn-ghost btn-sm" id="m-cancel">Cancel</button>
+    </div>`;
+  },
+
+  renderModelChat(models) {
+    const history = this.modelChatHistory || [];
+    const selectedModel = this.modelChatModelId || (models[0] && models[0].id) || '';
+    const modelName = models.find((m) => m.id === selectedModel)?.displayName || models[0]?.displayName || 'None';
+
+    return `<div class="mcp-chat">
+      <div class="mcp-chat-messages" id="model-chat-messages">
+        ${history.length === 0
+          ? `<div class="mcp-chat-empty">Test your model:<br><span>"Write a one-sentence greeting"</span></div>`
+          : history.map((msg) => this.renderChatMessage(msg)).join('')
+        }
       </div>
-    </div>
-    ${models.length === 0 ? CC.empty('No models configured.', 'Add an AI model to start generating content.') : models.map((m) => `
-      <div class="list-item">
-        <div class="list-item-info">
-          <div class="list-item-title">${CC.escapeHtml(m.displayName || m.model)}</div>
-          <div class="list-item-sub">${CC.escapeHtml(m.provider)} &middot; ${CC.escapeHtml(m.model)} &middot; ${m.connectionType === 'oauth-cli' ? 'OAuth/CLI' : 'API Key'}</div>
+      <div class="mcp-chat-input-wrap">
+        <textarea id="model-chat-input" class="mcp-chat-input" rows="1" placeholder="Test your model..."></textarea>
+        <button id="model-chat-send" class="mcp-chat-send" ${models.length === 0 ? 'disabled' : ''}>&#9650;</button>
+      </div>
+      <div class="mcp-chat-meta">
+        <div class="mcp-chat-meta-item" id="model-chat-model-label">
+          <span class="mcp-chat-meta-label">Model</span>
+          <span class="mcp-chat-meta-value">${CC.escapeHtml(modelName)}</span>
         </div>
-        <div class="list-item-actions">
-          <button class="btn-danger btn-sm" data-model-remove="${m.id}">Remove</button>
-        </div>
+        ${history.length > 0 ? '<button class="mcp-chat-clear" id="model-chat-clear">Clear chat</button>' : ''}
       </div>
-    `).join('')}`;
+      <select id="model-chat-model-select" class="hidden">
+        ${models.map((m) => `<option value="${m.id}" ${m.id === selectedModel ? 'selected' : ''}>${CC.escapeHtml(m.displayName || m.model)}</option>`).join('')}
+      </select>
+    </div>`;
   },
 
   initModels() {
+    const self = this;
     const form = document.getElementById('model-form');
     document.getElementById('model-add')?.addEventListener('click', () => {
       form.classList.toggle('hidden');
+      if (!form.classList.contains('hidden')) {
+        delete form.dataset.editId;
+        form.querySelectorAll('input').forEach((i) => { if (i.type !== 'number') i.value = ''; });
+        document.getElementById('m-maxTokens').value = '8192';
+        document.getElementById('m-save').textContent = 'Save Model';
+      }
     });
     document.getElementById('m-cancel')?.addEventListener('click', () => form.classList.add('hidden'));
 
@@ -250,7 +305,6 @@ CC.views.settings = {
       cliFields.classList.toggle('hidden', !isCli);
     });
 
-    // Auto-fill base URL based on provider
     document.getElementById('m-provider')?.addEventListener('change', (e) => {
       const urls = {
         anthropic: 'https://api.anthropic.com',
@@ -263,7 +317,8 @@ CC.views.settings = {
     });
 
     document.getElementById('m-save')?.addEventListener('click', async () => {
-      const model = {
+      const editId = form.dataset.editId;
+      const payload = {
         displayName: document.getElementById('m-displayName').value,
         provider: document.getElementById('m-provider').value,
         model: document.getElementById('m-model').value,
@@ -273,11 +328,41 @@ CC.views.settings = {
         cliPath: document.getElementById('m-cliPath').value,
         maxOutputTokens: parseInt(document.getElementById('m-maxTokens').value) || 8192
       };
-      await CC.api.models.add(model);
+      if (editId) {
+        await CC.api.models.update(editId, payload);
+        delete form.dataset.editId;
+      } else {
+        await CC.api.models.add(payload);
+      }
       await CC.refresh('models');
       CC.navigate('settings');
     });
 
+    // Edit
+    document.querySelectorAll('[data-model-edit]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const m = CC.state.models.find((mo) => mo.id === btn.dataset.modelEdit);
+        if (!m) return;
+        form.classList.remove('hidden');
+        form.dataset.editId = m.id;
+        document.getElementById('m-displayName').value = m.displayName || '';
+        document.getElementById('m-provider').value = m.provider || 'anthropic';
+        document.getElementById('m-model').value = m.model || '';
+        document.getElementById('m-connectionType').value = m.connectionType || 'api-key';
+        document.getElementById('m-baseUrl').value = m.baseUrl || '';
+        document.getElementById('m-apiKey').value = m.apiKey || '';
+        document.getElementById('m-cliPath').value = m.cliPath || '';
+        document.getElementById('m-maxTokens').value = m.maxOutputTokens || 8192;
+        // Toggle fields
+        const isCli = (m.connectionType || 'api-key') === 'oauth-cli';
+        apiFields.classList.toggle('hidden', isCli);
+        cliFields.classList.toggle('hidden', !isCli);
+        document.getElementById('m-save').textContent = 'Update';
+        form.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+
+    // Remove
     document.querySelectorAll('[data-model-remove]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         await CC.api.models.remove(btn.dataset.modelRemove);
@@ -285,6 +370,101 @@ CC.views.settings = {
         CC.navigate('settings');
       });
     });
+
+    // Quick test from card
+    document.querySelectorAll('[data-model-test]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Testing...';
+        try {
+          const result = await CC.api.models.test(btn.dataset.modelTest, 'Say "Model connected and working" in one sentence.');
+          // Update model record with test status
+          await CC.api.models.update(btn.dataset.modelTest, {
+            lastTested: new Date().toISOString(),
+            lastTestResult: result.connected
+          });
+          await CC.refresh('models');
+          CC.navigate('settings');
+        } catch (e) {
+          CC.showStatus('Test failed: ' + e.message);
+          await CC.api.models.update(btn.dataset.modelTest, {
+            lastTested: new Date().toISOString(),
+            lastTestResult: false
+          });
+          await CC.refresh('models');
+          CC.navigate('settings');
+        }
+      });
+    });
+
+    // Model chat handlers
+    const chatInput = document.getElementById('model-chat-input');
+    const chatSend = document.getElementById('model-chat-send');
+    const modelSelect = document.getElementById('model-chat-model-select');
+
+    async function sendChat() {
+      const modelId = self.modelChatModelId || modelSelect.value;
+      const query = chatInput.value.trim();
+      if (!modelId || !query) return;
+
+      self.modelChatHistory.push({ role: 'user', content: query });
+      self.modelChatHistory.push({ role: 'system', content: 'Thinking...' });
+      chatInput.value = '';
+      chatInput.style.height = '';
+      CC.navigate('settings');
+
+      try {
+        const result = await CC.api.models.test(modelId, query);
+        self.modelChatHistory.pop();
+        if (result.connected) {
+          self.modelChatHistory.push({ role: 'assistant', content: result.response });
+        } else {
+          self.modelChatHistory.push({ role: 'assistant', content: 'Failed: ' + result.error });
+        }
+      } catch (e) {
+        self.modelChatHistory.pop();
+        self.modelChatHistory.push({ role: 'assistant', content: 'Failed: ' + e.message });
+      } finally {
+        CC.navigate('settings');
+        setTimeout(() => {
+          const msgs = document.getElementById('model-chat-messages');
+          if (msgs) msgs.scrollTop = msgs.scrollHeight;
+          document.getElementById('model-chat-input')?.focus();
+        }, 50);
+      }
+    }
+
+    chatSend?.addEventListener('click', sendChat);
+    chatInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+    });
+    chatInput?.addEventListener('input', () => {
+      chatInput.style.height = 'auto';
+      chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+    });
+
+    // Model selector
+    document.getElementById('model-chat-model-label')?.addEventListener('click', () => {
+      modelSelect.classList.toggle('hidden');
+      if (!modelSelect.classList.contains('hidden')) modelSelect.focus();
+    });
+    modelSelect?.addEventListener('change', () => {
+      self.modelChatModelId = modelSelect.value;
+      modelSelect.classList.add('hidden');
+      CC.navigate('settings');
+    });
+    modelSelect?.addEventListener('blur', () => modelSelect.classList.add('hidden'));
+
+    // Clear chat
+    document.getElementById('model-chat-clear')?.addEventListener('click', () => {
+      self.modelChatHistory = [];
+      CC.navigate('settings');
+    });
+
+    setTimeout(() => {
+      const msgs = document.getElementById('model-chat-messages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }, 50);
   },
 
   // ── Frameworks ──────────────────────────
@@ -369,37 +549,43 @@ CC.views.settings = {
   },
 
   // ── MCPs ────────────────────────────────
+  mcpChatHistory: [],
+
   renderMcps() {
     const mcps = CC.state.mcps || [];
-    return `<button class="btn-primary btn-sm" id="mcp-add" style="margin-bottom:28px">+ Add MCP</button>
-    <div id="mcp-form" class="hidden" style="max-width:520px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px">
-      <div class="form-group">
-        <label>Name</label>
-        <input id="mcp-name" type="text" placeholder="Payload CMS" />
+    return `<div class="mcp-section">
+      <button class="btn-primary btn-sm" id="mcp-add">+ Add MCP</button>
+      <div id="mcp-form" class="hidden mcp-form">
+        <div class="form-group">
+          <label>Name</label>
+          <input id="mcp-name" type="text" placeholder="Payload CMS" />
+        </div>
+        <div class="form-group">
+          <label>URL</label>
+          <input id="mcp-url" type="text" placeholder="https://cms.chrislema.com" />
+        </div>
+        <div class="form-group">
+          <label>Auth Type</label>
+          <select id="mcp-authType">
+            <option value="bearer">Bearer Token</option>
+            <option value="api-key">API Key</option>
+            <option value="oauth">OAuth</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Token / Key</label>
+          <input id="mcp-token" type="password" placeholder="..." />
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary btn-sm" id="mcp-save">Save</button>
+          <button class="btn-ghost btn-sm" id="mcp-cancel">Cancel</button>
+        </div>
       </div>
-      <div class="form-group">
-        <label>URL</label>
-        <input id="mcp-url" type="text" placeholder="https://cms.chrislema.com" />
+      <div id="mcp-list" class="mcp-list">
+        ${mcps.length === 0 ? CC.empty('No MCPs connected.', 'Add connections to your CMS, newsletter, analytics, etc.') : mcps.map((m) => this.renderMcpCard(m)).join('')}
       </div>
-      <div class="form-group">
-        <label>Auth Type</label>
-        <select id="mcp-authType">
-          <option value="bearer">Bearer Token</option>
-          <option value="api-key">API Key</option>
-          <option value="oauth">OAuth</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Token / Key</label>
-        <input id="mcp-token" type="password" placeholder="..." />
-      </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn-primary btn-sm" id="mcp-save">Save</button>
-        <button class="btn-ghost btn-sm" id="mcp-cancel">Cancel</button>
-      </div>
-    </div>
-    ${mcps.length === 0 ? CC.empty('No MCPs connected.', 'Add connections to your CMS, newsletter, analytics, etc.') : mcps.map((m) => this.renderMcpCard(m)).join('')}
-    ${mcps.length > 0 ? this.renderTestPrompt(mcps) : ''}`;
+      ${mcps.length > 0 ? this.renderMcpChat(mcps) : ''}
+    </div>`;
   },
 
   renderMcpCard(m) {
@@ -409,47 +595,76 @@ CC.views.settings = {
       ? `<span class="badge ok">Connected</span>`
       : `<span class="badge dim">Not connected</span>`;
 
-    return `<div class="list-item" style="flex-wrap:wrap">
-      <div class="list-item-info" style="flex:1;min-width:200px">
-        <div class="list-item-title">${CC.escapeHtml(m.name)} ${statusBadge}</div>
-        <div class="list-item-sub">
-          ${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}
-          ${connected ? ` &middot; <span style="color:var(--accent)">${toolCount} tools</span>` : ''}
-          ${m.lastError ? ` &middot; <span style="color:var(--danger)">${CC.escapeHtml(m.lastError)}</span>` : ''}
+    return `<div class="mcp-card">
+      <div class="mcp-card-top">
+        <div class="mcp-card-name">${CC.escapeHtml(m.name)} ${statusBadge}</div>
+        <div class="mcp-card-actions">
+          ${connected
+            ? `<button class="btn-danger btn-sm" data-mcp-disconnect="${m.id}">Disconnect</button>`
+            : `<button class="btn-primary btn-sm" data-mcp-connect="${m.id}">Connect</button>`
+          }
+          <button class="btn-ghost btn-sm" data-mcp-edit="${m.id}">Edit</button>
+          <button class="btn-ghost btn-sm" data-mcp-remove="${m.id}">Remove</button>
         </div>
-        ${connected && m.tools && m.tools.length ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${m.tools.slice(0, 8).map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t.name)}</span>`).join('')}${m.tools.length > 8 ? `<span class="badge dim" style="font-size:10.5px">+${m.tools.length - 8} more</span>` : ''}</div>` : ''}
       </div>
-      <div class="list-item-actions" style="flex-shrink:0">
-        ${connected
-          ? `<button class="btn-danger btn-sm" data-mcp-disconnect="${m.id}">Disconnect</button>`
-          : `<button class="btn-primary btn-sm" data-mcp-connect="${m.id}">Connect</button>`
-        }
-        <button class="btn-ghost btn-sm" data-mcp-edit="${m.id}">Edit</button>
-        <button class="btn-ghost btn-sm" data-mcp-remove="${m.id}">Remove</button>
+      <div class="mcp-card-url">
+        ${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}
+        ${connected ? ` &middot; <span style="color:var(--accent)">${toolCount} tools</span>` : ''}
+        ${m.lastError ? ` &middot; <span style="color:var(--danger)">${CC.escapeHtml(m.lastError)}</span>` : ''}
       </div>
+      ${connected && m.tools && m.tools.length ? `<div class="mcp-card-tags">${m.tools.map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t.name)}</span>`).join('')}</div>` : ''}
     </div>`;
   },
 
-  renderTestPrompt(mcps) {
+  renderMcpChat(mcps) {
     const connectedMcps = mcps.filter((m) => m.connected);
-    return `<div style="margin-top:28px;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius)">
-      <h3 style="margin:0 0 4px;font-size:14px">Test MCP Connection</h3>
-      <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">Ask a question using your connected MCPs. The model will pick the right tool and execute.</p>
-      <div style="display:flex;gap:10px;margin-bottom:12px">
-        <select id="mcp-test-select" style="flex:0 0 auto;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;color:var(--text);outline:none;font-family:inherit">
-          ${connectedMcps.length > 0
-            ? connectedMcps.map((m) => `<option value="${m.id}">${CC.escapeHtml(m.name)}</option>`).join('')
-            : '<option value="">No connected MCPs</option>'
-          }
-        </select>
+    const models = CC.state.models || [];
+    const history = this.mcpChatHistory || [];
+    const selectedMcp = this.mcpChatMcpId || (connectedMcps[0] && connectedMcps[0].id) || '';
+    const selectedModel = this.mcpChatModelId || (models[0] && models[0].id) || '';
+    const mcpName = connectedMcps.find((m) => m.id === selectedMcp)?.name || 'None';
+    const modelName = models.find((m) => m.id === selectedModel)?.displayName || 'None';
+
+    return `<div class="mcp-chat">
+      <div class="mcp-chat-messages" id="mcp-chat-messages">
+        ${history.length === 0
+          ? `<div class="mcp-chat-empty">Ask something like:<br><span>"Use payload cms to give me the title of my last post"</span></div>`
+          : history.map((msg) => this.renderChatMessage(msg)).join('')
+        }
       </div>
-      <textarea id="mcp-test-input" rows="2" placeholder="Use payload cms to give me the title of my last post" style="width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;font-family:inherit;resize:vertical;outline:none;background:#fff"></textarea>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-        <span id="mcp-test-status" style="font-size:12px;color:var(--muted)"></span>
-        <button class="btn-primary btn-sm" id="mcp-test-run" ${connectedMcps.length === 0 ? 'disabled' : ''}>Run Query</button>
+      <div class="mcp-chat-input-wrap">
+        <textarea id="mcp-chat-input" class="mcp-chat-input" rows="1" placeholder="Ask your MCP..."></textarea>
+        <button id="mcp-chat-send" class="mcp-chat-send" ${connectedMcps.length === 0 ? 'disabled' : ''}>&#9650;</button>
       </div>
-      <div id="mcp-test-result" class="hidden" style="margin-top:14px;padding:14px;background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13.5px;line-height:1.6;white-space:pre-wrap;color:var(--text);max-height:300px;overflow-y:auto"></div>
+      <div class="mcp-chat-meta">
+        <div class="mcp-chat-meta-item" id="mcp-chat-mcp-label">
+          <span class="mcp-chat-meta-label">MCP</span>
+          <span class="mcp-chat-meta-value">${CC.escapeHtml(mcpName)}</span>
+        </div>
+        <div class="mcp-chat-meta-item" id="mcp-chat-model-label">
+          <span class="mcp-chat-meta-label">Model</span>
+          <span class="mcp-chat-meta-value">${CC.escapeHtml(modelName)}</span>
+        </div>
+        ${history.length > 0 ? '<button class="mcp-chat-clear" id="mcp-chat-clear">Clear chat</button>' : ''}
+      </div>
+      <select id="mcp-chat-mcp-select" class="hidden">
+        ${connectedMcps.map((m) => `<option value="${m.id}" ${m.id === selectedMcp ? 'selected' : ''}>${CC.escapeHtml(m.name)}</option>`).join('')}
+      </select>
+      <select id="mcp-chat-model-select" class="hidden">
+        ${models.map((m) => `<option value="${m.id}" ${m.id === selectedModel ? 'selected' : ''}>${CC.escapeHtml(m.displayName || m.model)}</option>`).join('')}
+      </select>
     </div>`;
+  },
+
+  renderChatMessage(msg) {
+    if (msg.role === 'user') {
+      return `<div class="mcp-chat-user"><div class="mcp-chat-user-bubble">${CC.escapeHtml(msg.content)}</div></div>`;
+    }
+    if (msg.role === 'system') {
+      return `<div class="mcp-chat-system">${CC.escapeHtml(msg.content)}</div>`;
+    }
+    const toolBadge = msg.tool ? `<div class="mcp-chat-tool"><span class="badge accent">${CC.escapeHtml(msg.tool)}</span></div>` : '';
+    return `<div class="mcp-chat-assistant">${toolBadge}<div class="mcp-chat-assistant-text">${CC.escapeHtml(msg.content)}</div></div>`;
   },
 
   initMcps() {
@@ -540,47 +755,109 @@ CC.views.settings = {
       });
     });
 
-    // Test prompt handler
-    document.getElementById('mcp-test-run')?.addEventListener('click', async () => {
-      const select = document.getElementById('mcp-test-select');
-      const input = document.getElementById('mcp-test-input');
-      const statusEl = document.getElementById('mcp-test-status');
-      const resultEl = document.getElementById('mcp-test-result');
-      const btn = document.getElementById('mcp-test-run');
+    // MCP chat handlers
+    const self = this;
+    const chatInput = document.getElementById('mcp-chat-input');
+    const chatSend = document.getElementById('mcp-chat-send');
+    const mcpSelect = document.getElementById('mcp-chat-mcp-select');
+    const modelSelect = document.getElementById('mcp-chat-model-select');
 
-      const mcpId = select.value;
-      const query = input.value.trim();
+    async function sendChat() {
+      const mcpId = self.mcpChatMcpId || mcpSelect.value;
+      const modelId = self.mcpChatModelId || modelSelect.value;
+      const query = chatInput.value.trim();
       if (!mcpId || !query) return;
 
-      const models = CC.state.models || [];
-      if (models.length === 0) {
-        statusEl.textContent = 'Add a model in Settings > Models first';
+      if (!modelId) {
+        self.mcpChatHistory.push({ role: 'system', content: 'Add a model in Settings > Models first' });
+        CC.navigate('settings');
         return;
       }
 
-      btn.disabled = true;
-      btn.textContent = 'Running...';
-      statusEl.textContent = 'Querying...';
-      resultEl.classList.add('hidden');
+      self.mcpChatHistory.push({ role: 'user', content: query });
+      self.mcpChatHistory.push({ role: 'system', content: 'Thinking...' });
+      chatInput.value = '';
+      chatInput.style.height = '';
+      CC.navigate('settings');
 
       try {
-        const result = await CC.api.mcps.query(mcpId, query, models[0].id);
+        const result = await CC.api.mcps.query(mcpId, query, modelId);
+        self.mcpChatHistory.pop();
+
         if (result.error) {
-          resultEl.textContent = result.error;
+          self.mcpChatHistory.push({ role: 'assistant', content: result.error });
         } else if (result.formatted) {
-          resultEl.textContent = `Tool: ${result.tool}\n\n${result.formatted}`;
+          self.mcpChatHistory.push({ role: 'assistant', content: result.formatted, tool: result.tool });
         } else {
-          resultEl.textContent = JSON.stringify(result, null, 2);
+          self.mcpChatHistory.push({ role: 'assistant', content: JSON.stringify(result, null, 2) });
         }
-        resultEl.classList.remove('hidden');
-        statusEl.textContent = '';
       } catch (e) {
-        statusEl.textContent = 'Failed: ' + e.message;
+        self.mcpChatHistory.pop();
+        self.mcpChatHistory.push({ role: 'assistant', content: 'Failed: ' + e.message });
       } finally {
-        btn.disabled = false;
-        btn.textContent = 'Run Query';
+        CC.navigate('settings');
+        setTimeout(() => {
+          const msgs = document.getElementById('mcp-chat-messages');
+          if (msgs) msgs.scrollTop = msgs.scrollHeight;
+          document.getElementById('mcp-chat-input')?.focus();
+        }, 50);
+      }
+    }
+
+    chatSend?.addEventListener('click', sendChat);
+
+    chatInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
       }
     });
+
+    // Auto-grow textarea
+    chatInput?.addEventListener('input', () => {
+      chatInput.style.height = 'auto';
+      chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+    });
+
+    // MCP selector - click the meta item to show the hidden select
+    document.getElementById('mcp-chat-mcp-label')?.addEventListener('click', () => {
+      mcpSelect.classList.toggle('hidden');
+      if (!mcpSelect.classList.contains('hidden')) mcpSelect.focus();
+    });
+    mcpSelect?.addEventListener('change', () => {
+      self.mcpChatMcpId = mcpSelect.value;
+      mcpSelect.classList.add('hidden');
+      CC.navigate('settings');
+    });
+    mcpSelect?.addEventListener('blur', () => {
+      mcpSelect.classList.add('hidden');
+    });
+
+    // Model selector
+    document.getElementById('mcp-chat-model-label')?.addEventListener('click', () => {
+      modelSelect.classList.toggle('hidden');
+      if (!modelSelect.classList.contains('hidden')) modelSelect.focus();
+    });
+    modelSelect?.addEventListener('change', () => {
+      self.mcpChatModelId = modelSelect.value;
+      modelSelect.classList.add('hidden');
+      CC.navigate('settings');
+    });
+    modelSelect?.addEventListener('blur', () => {
+      modelSelect.classList.add('hidden');
+    });
+
+    // Clear chat
+    document.getElementById('mcp-chat-clear')?.addEventListener('click', () => {
+      self.mcpChatHistory = [];
+      CC.navigate('settings');
+    });
+
+    // Scroll to bottom on load
+    setTimeout(() => {
+      const msgs = document.getElementById('mcp-chat-messages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }, 50);
   },
 
   // ── Anti-AI ─────────────────────────────
