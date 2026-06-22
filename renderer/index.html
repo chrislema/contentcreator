@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self';" />
+    <title>ContentCreator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="logo">CC</div>
+          <div class="brand-text">
+            <div class="brand-name">ContentCreator</div>
+          </div>
+        </div>
+        <nav class="nav">
+          <button class="nav-item" data-view="settings">
+            <span class="nav-icon">&#9881;</span> <span class="nav-label">Settings</span>
+          </button>
+          <button class="nav-item" data-view="audiences">
+            <span class="nav-icon">&#9737;</span> <span class="nav-label">Audiences</span>
+          </button>
+          <button class="nav-item" data-view="topics">
+            <span class="nav-icon">&#9776;</span> <span class="nav-label">Topics</span>
+          </button>
+          <button class="nav-item" data-view="drafts">
+            <span class="nav-icon">&#9998;</span> <span class="nav-label">Drafts</span>
+          </button>
+          <button class="nav-item" data-view="distributions">
+            <span class="nav-icon">&#9654;</span> <span class="nav-label">Distributions</span>
+          </button>
+        </nav>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="Collapse sidebar">
+          <span id="toggle-icon">&#9776;</span>
+        </button>
+      </aside>
+
+      <main class="main" id="main-content">
+      </main>
+    </div>
+
+    <div id="status-bar" class="status-bar hidden"></div>
+
+    <script src="app.js"></script>
+    <script src="views/settings.js"></script>
+    <script src="views/audiences.js"></script>
+    <script src="views/topics.js"></script>
+    <script src="views/drafts.js"></script>
+    <script src="views/distributions.js"></script>
+    <script src="main-init.js"></script>
+  </body>
+</html>

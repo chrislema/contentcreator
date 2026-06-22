@@ -1,0 +1,36 @@
+{
+  "name": "contentcreator",
+  "version": "1.0.0",
+  "description": "Create, edit, and organize text content: articles, blog posts, and social posts.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.chrislema.contentcreator",
+    "productName": "ContentCreator",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dir"],
+      "icon": "build/icon.png"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "renderer/**/*",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  },
+  "author": "Chris Lema",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
+    "sharp": "^0.35.2"
+  }
+}
