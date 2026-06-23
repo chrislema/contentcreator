@@ -6,16 +6,71 @@ const { createCollection, createDocument } = require('./lib/store');
 const seed = require('./lib/seedData');
 const { parseAudienceMarkdown, parseVoiceProfileMarkdown, parsePlatformProfileMarkdown, makeId } = require('./lib/parser');
 const { buildDraftSystemPrompt, chatCompletion } = require('./lib/modelClient');
-const { connectMcp, queryMcp } = require('./lib/mcpClient');
+const { connectMcp, queryMcp, callTool } = require('./lib/mcpClient');
 
 let win;
 
 // Stores (initialized in createWindow)
 let settingsStore, frameworksStore, antiAiStore, voiceProfilesStore, platformProfilesStore;
-let audiencesStore, topicsStore, draftsStore, distributionsStore;
+let audiencesStore, topicsStore, draftsStore, distributionsStore, existingContentStore;
 
 function status(text) {
   if (win && !win.isDestroyed()) win.webContents.send('app:status', text);
+}
+
+// Parse a markdown article with optional YAML front matter
+function parseArticle(text, filename) {
+  let title = filename;
+  let date = null;
+  let tags = [];
+  let description = '';
+  let body = text;
+
+  // Parse YAML front matter (between --- delimiters)
+  const fmMatch = text.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (fmMatch) {
+    const fm = fmMatch[1];
+    body = text.slice(fmMatch[0].length);
+
+    // Extract fields from front matter
+    const titleM = fm.match(/^title:\s*"?([^"\n]+)"?/m);
+    if (titleM) title = titleM[1].trim();
+
+    const dateM = fm.match(/^date:\s*(.+)$/m);
+    if (dateM) date = dateM[1].trim();
+
+    const tagsM = fm.match(/^tags:\s*\[([^\]]*)\]/m);
+    if (tagsM) {
+      tags = tagsM[1].split(',').map((t) => t.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+    }
+
+    const descM = fm.match(/^description:\s*"?([^"\n]*(?:\n[^"\n]*)*)"?/m);
+    if (descM) description = descM[1].trim();
+  } else {
+    // No front matter - try H1
+    const h1Match = body.match(/^#\s+(.+)$/m);
+    if (h1Match) {
+      title = h1Match[1].trim();
+      body = body.replace(/^#\s+.+\n?/m, '');
+    }
+  }
+
+  body = body.trim();
+
+  // Use description as excerpt, or fall back to body
+  const excerpt = description || (body.slice(0, 300).trim() + (body.length > 300 ? '...' : ''));
+
+  return {
+    id: makeId(),
+    title,
+    date,
+    tags,
+    description,
+    excerpt,
+    body,
+    source: filename,
+    importedAt: new Date().toISOString()
+  };
 }
 
 function getDataDir() {
@@ -85,6 +140,7 @@ function createWindow() {
   topicsStore = createCollection(path.join(dir, 'topics.json'));
   draftsStore = createCollection(path.join(dir, 'drafts.json'));
   distributionsStore = createCollection(path.join(dir, 'distributions.json'));
+  existingContentStore = createCollection(path.join(dir, 'existingContent.json'));
 
   seedIfNeeded();
 }
@@ -356,6 +412,151 @@ ipcMain.handle('import:file', async (_e, type) => {
   return null;
 });
 
+// ── IPC: Existing Content ───────────────────────────────────────
+ipcMain.handle('existing:list', () => existingContentStore.list());
+ipcMain.handle('existing:add', (_e, article) => {
+  const record = {
+    id: makeId(),
+    title: article.title || 'Untitled',
+    excerpt: article.excerpt || '',
+    body: article.body || '',
+    source: article.source || '',
+    importedAt: new Date().toISOString()
+  };
+  existingContentStore.add(record);
+  status(`Added: ${record.title}`);
+  return record;
+});
+ipcMain.handle('existing:update', (_e, id, patch) => {
+  const existing = existingContentStore.get(id);
+  if (!existing) throw new Error('Article not found');
+  const merged = { ...existing, ...patch, id };
+  existingContentStore.add(merged);
+  return merged;
+});
+ipcMain.handle('existing:remove', (_e, id) => {
+  existingContentStore.remove(id);
+  status('Article removed');
+  return existingContentStore.list();
+});
+ipcMain.handle('existing:importFiles', async () => {
+  const result = await dialog.showOpenDialog(win, {
+    title: 'Import Articles',
+    filters: [{ name: 'Markdown/Text', extensions: ['md', 'txt', 'markdown'] }],
+    properties: ['openFile', 'multiSelections']
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+
+  const imported = [];
+  for (const filePath of result.filePaths) {
+    const text = fs.readFileSync(filePath, 'utf8');
+    const filename = path.basename(filePath, path.extname(filePath));
+    const record = parseArticle(text, filename);
+    existingContentStore.add(record);
+    imported.push(record);
+  }
+  status(`Imported ${imported.length} article${imported.length === 1 ? '' : 's'}`);
+  return imported;
+});
+
+// Extract plain text from a Lexical JSON body structure
+function extractLexicalText(body) {
+  if (!body || typeof body !== 'object') return '';
+  const parts = [];
+  function walk(node) {
+    if (!node) return;
+    if (node.text) {
+      parts.push(node.text);
+      return;
+    }
+    if (node.children) {
+      for (const child of node.children) walk(child);
+    }
+    if (node.type === 'paragraph' || node.type === 'heading') {
+      parts.push('\n\n');
+    }
+  }
+  if (body.root) walk(body.root);
+  else walk(body);
+  return parts.join('').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+ipcMain.handle('existing:syncMcp', async () => {
+  const s = settingsStore.get();
+  const payloadMcp = (s.mcps || []).find((m) => m.connected && m.name && m.name.toLowerCase().includes('payload'));
+  if (!payloadMcp) throw new Error('Payload CMS MCP not connected. Connect it in Settings > MCPs first.');
+
+  status('Fetching AI-tagged posts from CMS...');
+
+  // Fetch all AI-tagged posts (paginate)
+  let allPosts = [];
+  let page = 1;
+  let hasMore = true;
+  while (hasMore) {
+    const result = await callTool(payloadMcp, 'find_posts', {
+      limit: 100,
+      page,
+      where: { tags: { contains: 'ai' } }
+    });
+    const data = JSON.parse(result);
+    allPosts = allPosts.concat(data.docs || []);
+    hasMore = data.hasNextPage;
+    page++;
+  }
+
+  status(`Found ${allPosts.length} AI-tagged posts in CMS. Syncing...`);
+
+  // Build title index of local articles (normalized for matching)
+  const localArticles = existingContentStore.list();
+  const titleIndex = {};
+  for (const a of localArticles) {
+    const normalized = (a.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ');
+    if (normalized) titleIndex[normalized] = a;
+  }
+
+  let tagsUpdated = 0;
+  let imported = 0;
+
+  for (const post of allPosts) {
+    const normalizedTitle = (post.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ');
+    const match = normalizedTitle ? titleIndex[normalizedTitle] : null;
+
+    if (match) {
+      // Update tags if they differ
+      const currentTags = JSON.stringify(match.tags || []);
+      const newTags = JSON.stringify(post.tags || []);
+      if (currentTags !== newTags) {
+        await existingContentStore.add({
+          ...match,
+          tags: post.tags || [],
+          date: post.date || match.date
+        });
+        tagsUpdated++;
+      }
+    } else {
+      // Import new article
+      const body = extractLexicalText(post.body);
+      const record = {
+        id: makeId(),
+        title: post.title || 'Untitled',
+        date: post.date || null,
+        tags: post.tags || [],
+        description: post.description || '',
+        excerpt: post.description || (body.slice(0, 300).trim() + (body.length > 300 ? '...' : '')),
+        body,
+        source: post.slug || '',
+        importedAt: new Date().toISOString()
+      };
+      existingContentStore.add(record);
+      imported++;
+    }
+  }
+
+  const msg = `Synced: ${tagsUpdated} tags updated, ${imported} new articles imported`;
+  status(msg);
+  return { tagsUpdated, imported, total: allPosts.length };
+});
+
 // ── IPC: Topics ──────────────────────────────────────────────────
 ipcMain.handle('topics:list', () => topicsStore.list());
 ipcMain.handle('topics:add', (_e, topic) => {
@@ -612,7 +813,8 @@ Return ONLY valid JSON.`;
 ipcMain.handle('app:getState', () => ({
   hasModels: ((settingsStore.get().models || []).length > 0),
   hasAudiences: audiencesStore.list().length > 0,
-  hasFrameworks: frameworksStore.list().filter((f) => f.active).length > 0
+  hasFrameworks: frameworksStore.list().filter((f) => f.active).length > 0,
+  hasExisting: existingContentStore.list().length > 0
 }));
 
 app.whenReady().then(() => {

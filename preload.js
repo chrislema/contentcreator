@@ -72,6 +72,16 @@ contextBridge.exposeInMainWorld('api', {
     remove: (id) => ipcRenderer.invoke('audiences:remove', id)
   },
 
+  // Existing Content
+  existing: {
+    list: () => ipcRenderer.invoke('existing:list'),
+    add: (article) => ipcRenderer.invoke('existing:add', article),
+    update: (id, patch) => ipcRenderer.invoke('existing:update', id, patch),
+    remove: (id) => ipcRenderer.invoke('existing:remove', id),
+    importFiles: () => ipcRenderer.invoke('existing:importFiles'),
+    syncMcp: () => ipcRenderer.invoke('existing:syncMcp')
+  },
+
   // Import
   import: {
     file: (type) => ipcRenderer.invoke('import:file', type)

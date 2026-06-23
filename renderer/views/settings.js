@@ -9,6 +9,7 @@ CC.views.settings = {
       <button class="sub-tab ${this.subView === 'models' ? 'active' : ''}" data-sub="models">Models</button>
       <button class="sub-tab ${this.subView === 'frameworks' ? 'active' : ''}" data-sub="frameworks">Frameworks</button>
       <button class="sub-tab ${this.subView === 'mcps' ? 'active' : ''}" data-sub="mcps">MCPs</button>
+      <button class="sub-tab ${this.subView === 'existing' ? 'active' : ''}" data-sub="existing">Existing Content</button>
       <button class="sub-tab ${this.subView === 'antiAi' ? 'active' : ''}" data-sub="antiAi">Anti-AI</button>
     </div>
     <div class="section-body" id="settings-content">
@@ -22,6 +23,7 @@ CC.views.settings = {
       case 'models': return this.renderModels();
       case 'frameworks': return this.renderFrameworks();
       case 'mcps': return this.renderMcps();
+      case 'existing': return this.renderExisting();
       case 'antiAi': return this.renderAntiAi();
       default: return '';
     }
@@ -39,6 +41,7 @@ CC.views.settings = {
     if (this.subView === 'models') this.initModels();
     if (this.subView === 'frameworks') this.initFrameworks();
     if (this.subView === 'mcps') this.initMcps();
+    if (this.subView === 'existing') this.initExisting();
     if (this.subView === 'antiAi') this.initAntiAi();
   },
 
@@ -903,6 +906,136 @@ CC.views.settings = {
       const msgs = document.getElementById('mcp-chat-messages');
       if (msgs) msgs.scrollTop = msgs.scrollHeight;
     }, 50);
+  },
+
+  // ── Existing Content ────────────────────
+  existingSort: 'date-desc',
+  existingTagFilter: '',
+
+  renderExisting() {
+    const articles = CC.state.existing || [];
+
+    // Collect all unique tags for filter dropdown
+    const allTags = [...new Set(articles.flatMap((a) => a.tags || []))].sort();
+
+    // Apply tag filter
+    let filtered = articles;
+    if (this.existingTagFilter) {
+      filtered = filtered.filter((a) => (a.tags || []).includes(this.existingTagFilter));
+    }
+
+    // Apply sort
+    filtered = [...filtered].sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      return this.existingSort === 'date-asc' ? da - db : db - da;
+    });
+
+    return `<div class="mcp-section">
+      <div class="existing-import-row">
+        <button class="btn-primary btn-sm" id="existing-import">+ Import Articles</button>
+        <button class="btn-ghost btn-sm" id="existing-sync-mcp">Update with MCP</button>
+      </div>
+      <div class="existing-controls">
+        <select id="existing-tag-filter" class="existing-select">
+          <option value="">All tags (${articles.length})</option>
+          ${allTags.map((t) => `<option value="${CC.escapeHtml(t)}" ${t === this.existingTagFilter ? 'selected' : ''}>${CC.escapeHtml(t)}</option>`).join('')}
+        </select>
+        <select id="existing-sort" class="existing-select">
+          <option value="date-desc" ${this.existingSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
+          <option value="date-asc" ${this.existingSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
+        </select>
+        <span class="existing-count">${filtered.length} article${filtered.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="mcp-list">
+        ${filtered.length === 0
+          ? CC.empty('No articles found.', articles.length === 0 ? 'Select markdown or text files to build your content library.' : 'Try a different tag filter.')
+          : filtered.map((a) => this.renderExistingCard(a)).join('')
+        }
+      </div>
+    </div>`;
+  },
+
+  renderExistingCard(a) {
+    const dateStr = a.date
+      ? new Date(a.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+      : '';
+    const tags = (a.tags || []).map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t)}</span>`).join('');
+    return `<div class="mcp-card">
+      <div class="mcp-card-top">
+        <div class="mcp-card-name">${CC.escapeHtml(a.title)}</div>
+        <div class="mcp-card-actions">
+          ${dateStr ? `<span class="existing-date">${dateStr}</span>` : ''}
+          <button class="btn-primary btn-sm" data-existing-view="${a.id}">View</button>
+          <button class="btn-danger btn-sm" data-existing-remove="${a.id}">Remove</button>
+        </div>
+      </div>
+      <div class="mcp-card-url">${CC.escapeHtml((a.excerpt || '').slice(0, 180))}${(a.excerpt || '').length > 180 ? '...' : ''}</div>
+      ${tags ? `<div class="mcp-card-tags">${tags}</div>` : ''}
+    </div>`;
+  },
+
+  initExisting() {
+    document.getElementById('existing-import')?.addEventListener('click', async () => {
+      const result = await CC.api.existing.importFiles();
+      if (result) {
+        await CC.refresh('existing');
+        CC.navigate('settings');
+      }
+    });
+
+    document.getElementById('existing-tag-filter')?.addEventListener('change', (e) => {
+      this.existingTagFilter = e.target.value;
+      CC.navigate('settings');
+    });
+
+    document.getElementById('existing-sort')?.addEventListener('change', (e) => {
+      this.existingSort = e.target.value;
+      CC.navigate('settings');
+    });
+
+    document.getElementById('existing-sync-mcp')?.addEventListener('click', async () => {
+      const btn = document.getElementById('existing-sync-mcp');
+      btn.disabled = true;
+      btn.textContent = 'Syncing...';
+      try {
+        const result = await CC.api.existing.syncMcp();
+        CC.showStatus(`Synced: ${result.tagsUpdated} tags updated, ${result.imported} new articles imported`);
+        await CC.refresh('existing');
+        CC.navigate('settings');
+      } catch (e) {
+        CC.showStatus('Sync failed: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Update with MCP';
+      }
+    });
+
+    document.querySelectorAll('[data-existing-remove]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await CC.api.existing.remove(btn.dataset.existingRemove);
+        await CC.refresh('existing');
+        CC.navigate('settings');
+      });
+    });
+
+    document.querySelectorAll('[data-existing-view]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const article = CC.state.existing.find((a) => a.id === btn.dataset.existingView);
+        if (!article) return;
+        const modal = document.getElementById('existing-modal');
+        const modalTitle = document.getElementById('existing-modal-title');
+        const modalBody = document.getElementById('existing-modal-body');
+        if (modal && modalTitle && modalBody) {
+          modalTitle.textContent = article.title;
+          modalBody.textContent = article.body || article.excerpt || '';
+          modal.classList.remove('hidden');
+        }
+      });
+    });
+
+    document.getElementById('existing-modal-close')?.addEventListener('click', () => {
+      document.getElementById('existing-modal')?.classList.add('hidden');
+    });
   },
 
   // ── Anti-AI ─────────────────────────────

@@ -58,7 +58,7 @@ window.CC = {
   },
 
   async loadAll() {
-    const [settings, models, frameworks, mcps, antiAi, voiceProfiles, platformProfiles, audiences, topics, drafts, distributions] = await Promise.all([
+    const [settings, models, frameworks, mcps, antiAi, voiceProfiles, platformProfiles, audiences, topics, drafts, distributions, existing] = await Promise.all([
       this.api.settings.get(),
       this.api.models.list(),
       this.api.frameworks.list(),
@@ -69,7 +69,8 @@ window.CC = {
       this.api.audiences.list(),
       this.api.topics.list(),
       this.api.drafts.list(),
-      this.api.distributions.list()
+      this.api.distributions.list(),
+      this.api.existing.list()
     ]);
     this.state.settings = settings;
     this.state.models = models;
@@ -82,6 +83,7 @@ window.CC = {
     this.state.topics = topics;
     this.state.drafts = drafts;
     this.state.distributions = distributions;
+    this.state.existing = existing;
   },
 
   async refresh(key) {
@@ -96,6 +98,7 @@ window.CC = {
     if (key === 'topics' || !key) this.state.topics = await this.api.topics.list();
     if (key === 'drafts' || !key) this.state.drafts = await this.api.drafts.list();
     if (key === 'distributions' || !key) this.state.distributions = await this.api.distributions.list();
+    if (key === 'existing' || !key) this.state.existing = await this.api.existing.list();
   },
 
   async navigate(view) {

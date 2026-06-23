@@ -851,8 +851,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .mcp-section > #mcp-add,
-.mcp-section > #model-add {
+.mcp-section > #model-add,
+.mcp-section > #existing-import {
   align-self: flex-end;
+}
+
+.existing-import-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .mcp-form {
@@ -1086,4 +1093,84 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .mcp-chat-clear:hover {
   color: var(--danger);
   filter: none;
+}
+
+/* ── Existing Content ─────────────────────────── */
+.existing-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.existing-select {
+  padding: 5px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.existing-count {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.existing-date {
+  font-size: 12px;
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+
+/* ── Modal ────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 40px;
+}
+
+.modal {
+  background: var(--panel);
+  border-radius: var(--radius);
+  max-width: 700px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.modal-body {
+  padding: 22px;
+  overflow-y: auto;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-soft);
+  white-space: pre-wrap;
 }

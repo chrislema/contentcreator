@@ -35,6 +35,7 @@
 - Use `.mcp-section` wrapper which is `display:flex; flex-direction:column`
 - Button class: `btn-primary btn-sm`
 - Spacing above card list: the card list container needs `margin-top: 40px`
+- **IMPORTANT**: The `align-self: flex-end` CSS rule in styles.css must include EVERY section's add button ID. Currently: `#mcp-add`, `#model-add`, `#existing-import`. When adding a new section, add its button ID to this rule.
 
 ## Card Patterns (locked)
 
