@@ -235,11 +235,17 @@ CC.views.settings = {
     const statusBadge = tested
       ? (m.lastTestResult ? '<span class="badge ok">Working</span>' : '<span class="badge" style="color:var(--danger);border-color:var(--danger)">Failed</span>')
       : '<span class="badge dim">Untested</span>';
+    const isDefault = CC.state.settings.defaultModelId === m.id;
+    const defaultBadge = isDefault ? '<span class="badge accent">Default</span>' : '';
 
-    return `<div class="mcp-card">
+    return `<div class="mcp-card ${isDefault ? 'mcp-card-highlighted' : ''}">
       <div class="mcp-card-top">
-        <div class="mcp-card-name">${CC.escapeHtml(m.displayName || m.model)} ${statusBadge}</div>
+        <div class="mcp-card-name">${CC.escapeHtml(m.displayName || m.model)} ${statusBadge} ${defaultBadge}</div>
         <div class="mcp-card-actions">
+          ${isDefault
+            ? '<span style="font-size:12px;color:var(--accent);font-weight:600;padding:4px 8px">Default Model</span>'
+            : `<button class="btn-ghost btn-sm" data-model-default="${m.id}">Set Default</button>`
+          }
           <button class="btn-primary btn-sm" data-model-test="${m.id}">Test</button>
           <button class="btn-ghost btn-sm" data-model-edit="${m.id}">Edit</button>
           <button class="btn-ghost btn-sm" data-model-remove="${m.id}">Remove</button>
@@ -256,7 +262,12 @@ CC.views.settings = {
   renderModelChat(models) {
     const history = this.modelChatHistory || [];
     const workingModels = models.filter((m) => m.lastTestResult);
-    const selectedModel = this.modelChatModelId || (workingModels[0] && workingModels[0].id) || (models[0] && models[0].id) || '';
+    const defaultModelId = CC.state.settings?.defaultModelId;
+    const selectedModel = this.modelChatModelId
+      || defaultModelId
+      || (workingModels[0] && workingModels[0].id)
+      || (models[0] && models[0].id)
+      || '';
     const modelName = models.find((m) => m.id === selectedModel)?.displayName || models[0]?.displayName || 'None';
     const modelCount = models.length;
     const workingCount = workingModels.length;
@@ -374,6 +385,15 @@ CC.views.settings = {
       btn.addEventListener('click', async () => {
         await CC.api.models.remove(btn.dataset.modelRemove);
         await CC.refresh('models');
+        CC.navigate('settings');
+      });
+    });
+
+    // Set default model
+    document.querySelectorAll('[data-model-default]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await CC.api.settings.patch({ defaultModelId: btn.dataset.modelDefault });
+        await CC.refresh('settings');
         CC.navigate('settings');
       });
     });
@@ -629,7 +649,12 @@ CC.views.settings = {
     const workingModels = models.filter((m) => m.lastTestResult);
     const history = this.mcpChatHistory || [];
     const selectedMcp = this.mcpChatMcpId || (connectedMcps[0] && connectedMcps[0].id) || '';
-    const selectedModel = this.mcpChatModelId || (workingModels[0] && workingModels[0].id) || (models[0] && models[0].id) || '';
+    const defaultModelId = CC.state.settings?.defaultModelId;
+    const selectedModel = this.mcpChatModelId
+      || defaultModelId
+      || (workingModels[0] && workingModels[0].id)
+      || (models[0] && models[0].id)
+      || '';
     const mcpName = connectedMcps.find((m) => m.id === selectedMcp)?.name || 'None';
     const modelName = models.find((m) => m.id === selectedModel)?.displayName || 'None';
     const mcpCount = mcps.length;

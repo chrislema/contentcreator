@@ -119,7 +119,8 @@ CC.views.topics = {
         CC.showStatus('Add a model in Settings first');
         return;
       }
-      const model = models[0];
+      const defaultModelId = CC.state.settings?.defaultModelId;
+      const model = models.find((m) => m.id === defaultModelId) || models[0];
       CC.showStatus('Generating topics...');
       try {
         await CC.api.topics.generate(model.id);
@@ -178,6 +179,8 @@ CC.views.topics = {
 
         const models = CC.state.models || [];
         if (models.length === 0) { CC.showStatus('Add a model in Settings first'); return; }
+        const defaultModelId = CC.state.settings?.defaultModelId;
+        const modelId = (models.find((m) => m.id === defaultModelId) || models[0]).id;
 
         // Find segment
         const segments = self.getAllSegments();
@@ -190,7 +193,7 @@ CC.views.topics = {
         const draft = await CC.api.drafts.add({
           title: topic.title,
           topicId: topic.id,
-          modelId: models[0].id,
+          modelId,
           segmentId: seg?.msId || '',
           frameworkIds: activeFws.map((f) => f.id),
           voiceProfileId: voice?.id || '',

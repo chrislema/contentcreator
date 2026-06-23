@@ -121,7 +121,10 @@ ipcMain.handle('models:update', (_e, id, patch) => {
 ipcMain.handle('models:remove', (_e, id) => {
   const s = settingsStore.get();
   const models = (s.models || []).filter((m) => m.id !== id);
-  settingsStore.patch({ models });
+  // Clear default if the removed model was the default
+  const patch = { models };
+  if (s.defaultModelId === id) patch.defaultModelId = '';
+  settingsStore.patch(patch);
   status('Model removed');
   return models;
 });

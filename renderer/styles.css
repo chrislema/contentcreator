@@ -876,6 +876,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-bottom: 12px;
 }
 
+.mcp-card-highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .mcp-card-top {
   display: flex;
   align-items: center;
