@@ -2,18 +2,23 @@
 CC.views.topics = {
   filterSegment: '',
   filterStatus: '',
-  sortBy: 'priority',
+  sortBy: 'score',
   searchQuery: '',
+  lastSources: '',
 
   html() {
     const topics = this.getFiltered();
     const segments = this.getAllSegments();
 
-    return `${CC.header('Topics', 'Research-driven topic ideas aligned with audience segments', `
+    // Check if any topics have scores (intelligent generation)
+    const hasScores = topics.some((t) => t.scores);
+
+    return `${CC.header('Topics', 'Strategically ranked topic ideas from your data', `
       <button class="btn-primary btn-sm" id="topic-generate">Generate Topics</button>
       <button class="btn-ghost btn-sm" id="topic-add">+ Add Topic</button>
     `)}
     <div class="section-body">
+      ${this.lastSources ? `<div class="topic-source-summary">Generated from: ${CC.escapeHtml(this.lastSources)}</div>` : ''}
       <div class="toolbar">
         <input id="topic-search" type="text" placeholder="Search topics..." value="${CC.escapeHtml(this.searchQuery)}" />
         <select id="topic-filter-segment">
@@ -27,6 +32,7 @@ CC.views.topics = {
           <option value="published" ${this.filterStatus === 'published' ? 'selected' : ''}>Published</option>
         </select>
         <select id="topic-sort">
+          <option value="score" ${this.sortBy === 'score' ? 'selected' : ''}>Sort: Score</option>
           <option value="priority" ${this.sortBy === 'priority' ? 'selected' : ''}>Sort: Priority</option>
           <option value="date" ${this.sortBy === 'date' ? 'selected' : ''}>Sort: Date</option>
           <option value="title" ${this.sortBy === 'title' ? 'selected' : ''}>Sort: Title</option>
@@ -34,7 +40,7 @@ CC.views.topics = {
       </div>
       ${topics.length === 0 ? CC.empty('No topics yet.', 'Generate topics from your connected data or add one manually.') : ''}
       <div class="card-grid">
-        ${topics.map((t) => this.renderCard(t)).join('')}
+        ${topics.map((t, i) => this.renderCard(t, i, hasScores)).join('')}
       </div>
     </div>`;
   },
@@ -47,7 +53,8 @@ CC.views.topics = {
       const q = this.searchQuery.toLowerCase();
       topics = topics.filter((t) => [t.title, t.angle, t.target, (t.cmsTags || []).join(' ')].join(' ').toLowerCase().includes(q));
     }
-    if (this.sortBy === 'priority') topics.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    if (this.sortBy === 'score') topics.sort((a, b) => ((b.scores?.total) || 0) - ((a.scores?.total) || 0));
+    else if (this.sortBy === 'priority') topics.sort((a, b) => (b.priority || 0) - (a.priority || 0));
     else if (this.sortBy === 'date') topics.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     else if (this.sortBy === 'title') topics.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
     return topics;
@@ -61,20 +68,34 @@ CC.views.topics = {
     }));
   },
 
-  renderCard(t) {
+  renderCard(t, idx, hasScores) {
     const p = t.priority || 3;
-    return `<div class="card" data-topic-id="${t.id}">
+    const scores = t.scores;
+    const rank = hasScores ? idx + 1 : null;
+
+    return `<div class="card ${rank === 1 ? 'card-top-ranked' : ''}" data-topic-id="${t.id}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div class="card-title">${CC.escapeHtml(t.title)}</div>
-        <span class="priority priority-${p}"><span class="priority-dot"></span> P${p}</span>
+        <div class="card-title">${rank ? `<span class="topic-rank">#${rank}</span> ` : ''}${CC.escapeHtml(t.title)}</div>
+        ${scores
+          ? `<span class="topic-score"><span class="topic-score-num">${scores.total}</span><span class="topic-score-max">/50</span></span>`
+          : `<span class="priority priority-${p}"><span class="priority-dot"></span> P${p}</span>`
+        }
       </div>
       <div class="card-desc">${CC.escapeHtml(t.angle || '')}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0">
+      ${scores ? `<div class="topic-scores-bar">
+        <span class="topic-score-pill" title="Search Demand: Backed by real GSC query volume">Search ${scores.searchDemand}</span>
+        <span class="topic-score-pill" title="Performance Potential: Aligned with proven GA traffic patterns">Traffic ${scores.performancePotential}</span>
+        <span class="topic-score-pill" title="Content Gap: Not already covered in your content library">Gap ${scores.contentGap}</span>
+        <span class="topic-score-pill" title="Audience Fit: Strong alignment with a segment's pain/goal">Fit ${scores.audienceFit}</span>
+        <span class="topic-score-pill" title="Uniqueness: Contrarian or non-obvious angle">Unique ${scores.uniqueness}</span>
+      </div>` : ''}
+      ${t.rationale ? `<div class="topic-rationale">${CC.escapeHtml(t.rationale)}</div>` : ''}
+      <div class="topic-tags-row">
         ${t.target ? `<span class="badge accent">${CC.escapeHtml(t.target)}</span>` : ''}
         ${(t.cmsTags || []).map((tag) => `<span class="badge">${CC.escapeHtml(tag)}</span>`).join('')}
         <span class="badge dim">${CC.escapeHtml(t.status || 'idea')}</span>
       </div>
-      <div style="display:flex;gap:6px;margin-top:8px">
+      <div class="topic-actions-row">
         <button class="btn-primary btn-sm" data-topic-draft="${t.id}">Draft</button>
         <button class="btn-ghost btn-sm" data-topic-edit="${t.id}">Edit</button>
         <button class="btn-danger btn-sm" data-topic-remove="${t.id}">Delete</button>
@@ -121,13 +142,20 @@ CC.views.topics = {
       }
       const defaultModelId = CC.state.settings?.defaultModelId;
       const model = models.find((m) => m.id === defaultModelId) || models[0];
-      CC.showStatus('Generating topics...');
+
+      const btn = document.getElementById('topic-generate');
+      btn.disabled = true;
+      btn.textContent = 'Analyzing...';
+      CC.setStickyStatus(true);
+      CC.showStatus('Starting topic generation...');
+
       try {
         await CC.api.topics.generate(model.id);
-        await CC.refresh('topics');
-        CC.navigate('topics');
+        // Generation runs in background - listener will handle completion
       } catch (e) {
         CC.showStatus('Failed: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Generate Topics';
       }
     });
 

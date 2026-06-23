@@ -31,13 +31,20 @@ window.CC = {
     } catch { return ''; }
   },
 
-  showStatus(text) {
+  showStatus(text, sticky = false) {
     const bar = document.getElementById('status-bar');
     if (!text) { bar.classList.add('hidden'); return; }
     bar.textContent = text;
     bar.classList.remove('hidden');
     clearTimeout(this._statusTimer);
-    this._statusTimer = setTimeout(() => bar.classList.add('hidden'), 3000);
+    // Only auto-hide for non-sticky messages
+    if (!sticky && !this._stickyStatus) {
+      this._statusTimer = setTimeout(() => bar.classList.add('hidden'), 3000);
+    }
+  },
+
+  setStickyStatus(on) {
+    this._stickyStatus = on;
   },
 
   header(title, subtitle, actions) {

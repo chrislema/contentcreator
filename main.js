@@ -7,6 +7,7 @@ const seed = require('./lib/seedData');
 const { parseAudienceMarkdown, parseVoiceProfileMarkdown, parsePlatformProfileMarkdown, makeId } = require('./lib/parser');
 const { buildDraftSystemPrompt, chatCompletion } = require('./lib/modelClient');
 const { connectMcp, queryMcp, callTool } = require('./lib/mcpClient');
+const { gatherAll, buildTopicPrompt } = require('./lib/topicIntelligence');
 
 let win;
 
@@ -16,6 +17,16 @@ let audiencesStore, topicsStore, draftsStore, distributionsStore, existingConten
 
 function status(text) {
   if (win && !win.isDestroyed()) win.webContents.send('app:status', text);
+}
+
+// Write errors to a log file for debugging
+function logError(source, error) {
+  const dir = getDataDir();
+  const logPath = path.join(dir, '..', 'error.log');
+  const entry = `[${new Date().toISOString()}] ${source}: ${error.message || error}\n${error.stack || ''}\n\n`;
+  try {
+    fs.appendFileSync(logPath, entry);
+  } catch {}
 }
 
 // Parse a markdown article with optional YAML front matter
@@ -198,6 +209,7 @@ ipcMain.handle('models:test', async (_e, modelId, message) => {
     return { connected: true, response };
   } catch (e) {
     status('Model test failed: ' + e.message);
+    logError('models:test', e);
     return { connected: false, error: e.message };
   }
 });
@@ -583,60 +595,91 @@ ipcMain.handle('topics:remove', (_e, id) => {
   return topicsStore.list();
 });
 
-// Generate topics using model + audience data
+// Generate topics using multi-source intelligence + default model
 ipcMain.handle('topics:generate', async (_e, modelId) => {
-  const s = settingsStore.get();
-  const models = s.models || [];
-  const model = models.find((m) => m.id === modelId);
-  if (!model) throw new Error('Model not found');
-
-  const audiences = audiencesStore.list();
-  const existingTopics = topicsStore.list();
-
-  const segments = audiences.map((aud) => ({
-    id: aud.id,
-    name: aud.name,
-    pains: (aud.invertedPainPyramid || []).map((p) => p.pain),
-    goals: aud.goalPyramid
-  }));
-
-  const sysPrompt = `You are a content strategist generating topic ideas. Here are the target audience micro-segments:\n${segments.map((s, i) => `${i + 1}. ${s.name}: Key pains: ${s.pains.join('; ')}. Base goal: ${s.goals?.level1 || ''}`).join('\n')}\n\nExisting topics already covered: ${existingTopics.map((t) => t.title).join(', ') || 'none'}\n\nGenerate 5 new topic ideas as JSON array. Each topic: {"title": "...", "angle": "...", "target": "segment name", "cmsTags": ["tag1","tag2"], "priority": 1-5}. Return ONLY valid JSON.`;
-
-  const messages = [
-    { role: 'system', content: sysPrompt },
-    { role: 'user', content: 'Generate 5 compelling topic ideas aligned with these audience segments.' }
-  ];
-
-  status('Generating topics...');
-  const response = await chatCompletion(model, messages, 4096);
-  status('Topics generated');
-
-  let topics;
   try {
-    const jsonMatch = response.match(/\[[\s\S]*\]/);
-    topics = JSON.parse(jsonMatch ? jsonMatch[0] : response);
-  } catch {
-    throw new Error('Failed to parse model response as JSON');
-  }
+    const s = settingsStore.get();
+    const models = s.models || [];
+    const model = models.find((m) => m.id === modelId) || models.find((m) => m.id === s.defaultModelId);
+    if (!model) throw new Error('No model found. Set a default model in Settings.');
 
-  const created = [];
-  for (const t of topics) {
-    const record = {
-      id: makeId(),
-      title: t.title,
-      angle: t.angle,
-      target: t.target,
-      targetAudience: audiences.find((a) => a.name === t.target)?.id || '',
-      cmsTags: t.cmsTags || [],
-      priority: t.priority || 3,
-      status: 'idea',
-      createdAt: new Date().toISOString()
-    };
-    topicsStore.add(record);
-    created.push(record);
+    // Clear old topics immediately so UI shows them being replaced
+    topicsStore.setAll([]);
+
+    // Start generation in background - return immediately
+    generateTopicsInBackground(model, s);
+
+    status('Generating 25 ranked topics... (this may take several minutes)');
+    return { started: true };
+  } catch (e) {
+    logError('topics:generate', e);
+    status('Topic generation failed: ' + e.message);
+    throw e;
   }
-  return created;
 });
+
+async function generateTopicsInBackground(model, settings) {
+  try {
+    status('Gathering content library, GSC, and GA data...');
+    const { context, sources } = await gatherAll(
+      { existing: existingContentStore, audiences: audiencesStore },
+      { mcps: settings.mcps || [] }
+    );
+
+    const { sysPrompt, userPrompt } = buildTopicPrompt(context, sources);
+
+    status(`Generating 25 ranked topics via ${model.displayName || model.model}...`);
+    const response = await chatCompletion(model, [
+      { role: 'system', content: sysPrompt },
+      { role: 'user', content: userPrompt }
+    ], 8192);
+
+    let topics;
+    try {
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      topics = JSON.parse(jsonMatch ? jsonMatch[0] : response);
+    } catch (parseErr) {
+      logError('topics:generate:parse', new Error(`Parse failed. Raw response (first 500): ${response.slice(0, 500)}`));
+      throw new Error('Model returned unparseable response');
+    }
+
+    if (!Array.isArray(topics) || topics.length === 0) {
+      throw new Error('Model returned no topics');
+    }
+
+    const audiences = audiencesStore.list();
+    const created = [];
+    for (const t of topics) {
+      const record = {
+        id: makeId(),
+        title: t.title,
+        angle: t.angle,
+        target: t.target,
+        targetAudience: audiences.find((a) => a.name === t.target)?.id || '',
+        cmsTags: t.cmsTags || [],
+        priority: t.priority || 3,
+        scores: t.scores || null,
+        rationale: t.rationale || '',
+        sources: sources.used,
+        status: 'idea',
+        createdAt: new Date().toISOString()
+      };
+      topicsStore.add(record);
+      created.push(record);
+    }
+
+    status(`Generated ${created.length} ranked topics from: ${sources.used.join(', ')}`);
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('topics:generated', { count: created.length, sources: sources.used });
+    }
+  } catch (e) {
+    logError('topics:generate:background', e);
+    status('Topic generation failed: ' + e.message);
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('topics:failed', { error: e.message });
+    }
+  }
+}
 
 // ── IPC: Drafts ──────────────────────────────────────────────────
 ipcMain.handle('drafts:list', () => draftsStore.list());

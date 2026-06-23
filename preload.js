@@ -7,6 +7,18 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('app:status', handler);
   },
 
+  onTopicsGenerated: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on('topics:generated', handler);
+    return () => ipcRenderer.removeListener('topics:generated', handler);
+  },
+
+  onTopicsFailed: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on('topics:failed', handler);
+    return () => ipcRenderer.removeListener('topics:failed', handler);
+  },
+
   // Settings
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
