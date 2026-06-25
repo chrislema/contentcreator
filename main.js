@@ -7,6 +7,7 @@ const seed = require('./lib/seedData');
 const { parseAudienceMarkdown, parseVoiceProfileMarkdown, parsePlatformProfileMarkdown, makeId } = require('./lib/parser');
 const { buildDraftSystemPrompt, chatCompletion } = require('./lib/modelClient');
 const { connectMcp, queryMcp, callTool } = require('./lib/mcpClient');
+const { runOAuthFlow, refreshToken } = require('./lib/mcpOAuth');
 const { gatherAll, buildTopicPrompt } = require('./lib/topicIntelligence');
 
 let win;
@@ -266,23 +267,67 @@ ipcMain.handle('mcps:remove', (_e, id) => {
 });
 ipcMain.handle('mcps:connect', async (_e, id) => {
   const s = settingsStore.get();
-  const mcp = (s.mcps || []).find((m) => m.id === id);
+  let mcp = (s.mcps || []).find((m) => m.id === id);
   if (!mcp) throw new Error('MCP not found');
 
   status(`Connecting to ${mcp.name}...`);
+
+  // For HTTP MCPs with oauth auth type, get OAuth token first
+  if (mcp.transport !== 'stdio' && mcp.authType === 'oauth') {
+    // If we have a stored token, try refreshing it first
+    if (mcp.oauth?.refreshToken) {
+      try {
+        status(`Refreshing ${mcp.name} token...`);
+        const { discoverMetadata } = require('./lib/mcpOAuth');
+        const metadata = await discoverMetadata(mcp.url);
+        const tokens = await refreshToken(metadata, mcp.oauth.clientId, mcp.oauth.refreshToken);
+        mcp = {
+          ...mcp,
+          oauth: {
+            ...mcp.oauth,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token || mcp.oauth.refreshToken,
+            expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null
+          }
+        };
+        const mcps1 = (settingsStore.get().mcps || []).map((m) => m.id === id ? mcp : m);
+        settingsStore.patch({ mcps: mcps1 });
+      } catch {
+        // Refresh failed, need full OAuth flow
+      }
+    }
+
+    // If no valid token, run the full OAuth flow
+    if (!mcp.oauth?.accessToken) {
+      try {
+        const tokens = await runOAuthFlow(mcp.url, (msg) => status(msg));
+        mcp = { ...mcp, oauth: tokens };
+        const mcps1 = (settingsStore.get().mcps || []).map((m) =>
+          m.id === id ? mcp : m
+        );
+        settingsStore.patch({ mcps: mcps1 });
+      } catch (e) {
+        const mcps = (settingsStore.get().mcps || []).map((m) =>
+          m.id === id ? { ...m, connected: false, toolCount: 0, tools: [], lastError: e.message } : m
+        );
+        settingsStore.patch({ mcps });
+        status(`OAuth failed: ${e.message}`);
+        throw e;
+      }
+    }
+  }
+
   try {
     const result = await connectMcp(mcp);
-    // Update MCP record with connection status and tools
-    const mcps = (s.mcps || []).map((m) =>
-      m.id === id ? { ...m, connected: true, toolCount: result.toolCount, tools: result.tools, lastConnected: new Date().toISOString() } : m
+    const mcps = (settingsStore.get().mcps || []).map((m) =>
+      m.id === id ? { ...mcp, connected: true, toolCount: result.toolCount, tools: result.tools, lastConnected: new Date().toISOString(), lastError: null } : m
     );
     settingsStore.patch({ mcps });
     status(`Connected to ${mcp.name}: ${result.toolCount} tools available`);
     return result;
   } catch (e) {
-    // Mark as disconnected
-    const mcps = (s.mcps || []).map((m) =>
-      m.id === id ? { ...m, connected: false, toolCount: 0, tools: [], lastError: e.message } : m
+    const mcps = (settingsStore.get().mcps || []).map((m) =>
+      m.id === id ? { ...mcp, connected: false, toolCount: 0, tools: [], lastError: e.message } : m
     );
     settingsStore.patch({ mcps });
     status(`Connection failed: ${e.message}`);
@@ -843,19 +888,57 @@ Write a single, ready-to-post ${platform} promotional message. No preamble, no e
   return draftsStore.get(draftId);
 });
 
-// Save the final platform post content and mark published
+// Publish a platform post via ContentStudio MCP
 ipcMain.handle('drafts:publishPlatform', async (_e, draftId, platform, content) => {
   const draft = draftsStore.get(draftId);
   if (!draft) throw new Error('Draft not found');
 
+  const s = settingsStore.get();
+  const csMcp = (s.mcps || []).find((m) => m.connected && /contentstudio/i.test(m.name));
+  if (!csMcp) throw new Error('ContentStudio MCP not connected. Add it in Settings > MCPs first.');
+
+  // Map our platform IDs to ContentStudio platform names
+  const csPlatform = { facebook: 'facebook', twitter: 'twitter', linkedin: 'linkedin' }[platform] || platform;
+
+  // Step 1: Find the social account for this platform
+  status(`Finding ${csPlatform} account...`);
+  let accountId = null;
+  try {
+    const accountsResult = await callTool(csMcp, 'fetch_social_accounts', { platform: csPlatform });
+    let accountsData;
+    try {
+      accountsData = JSON.parse(accountsResult);
+    } catch {
+      accountsData = accountsResult;
+    }
+    const accounts = accountsData?.data || accountsData || [];
+    if (Array.isArray(accounts) && accounts.length > 0) {
+      accountId = accounts[0]._id || accounts[0].id;
+    }
+  } catch (e) {
+    throw new Error(`Could not fetch ${csPlatform} accounts: ${e.message}`);
+  }
+
+  if (!accountId) throw new Error(`No ${csPlatform} account found in ContentStudio. Connect one first.`);
+
+  // Step 2: Create the post
+  status(`Publishing to ${csPlatform}...`);
+  const createResult = await callTool(csMcp, 'create_post', {
+    content: content,
+    accounts: [accountId],
+    scheduling: { publish_type: 'draft' }
+  });
+
+  // Mark as published on the draft
   const platformPosts = draft.platformPosts || {};
   platformPosts[platform] = {
     ...(platformPosts[platform] || {}),
     content,
-    publishedAt: new Date().toISOString()
+    publishedAt: new Date().toISOString(),
+    csResult: createResult.slice(0, 500)
   };
   const updated = draftsStore.add({ ...draft, platformPosts });
-  status(`Published to ${platform}`);
+  status(`Published to ${platform} via ContentStudio`);
   return updated;
 });
 

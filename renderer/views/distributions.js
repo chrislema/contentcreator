@@ -330,16 +330,20 @@ CC.views.distributions = {
         const lastAssistant = [...conv].reverse().find((m) => m.role === 'assistant');
         if (!lastAssistant) { CC.showStatus('No post to publish'); return; }
 
-        if (!confirm(`Publish this ${platform} post?`)) return;
+        if (!confirm(`Publish this ${platform} post to ContentStudio?`)) return;
         btn.disabled = true;
         btn.textContent = 'Publishing...';
+        CC.setStickyStatus(true);
+        CC.showStatus(`Publishing to ${platform} via ContentStudio...`);
         try {
           await CC.api.drafts.publishPlatform(draftId, platform, lastAssistant.content);
+          CC.setStickyStatus(false);
           delete self.openPanels[draftId];
           await CC.refresh('drafts');
           CC.showStatus(`Published to ${platform}`);
           CC.navigate('distributions');
         } catch (e) {
+          CC.setStickyStatus(false);
           CC.showStatus('Failed: ' + e.message);
           btn.disabled = false;
           btn.textContent = 'Publish';

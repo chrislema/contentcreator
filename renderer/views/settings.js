@@ -607,11 +607,11 @@ CC.views.settings = {
             <select id="mcp-authType">
               <option value="bearer">Bearer Token</option>
               <option value="api-key">API Key</option>
-              <option value="oauth">OAuth</option>
+              <option value="oauth">OAuth (Managed)</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>Token / Key</label>
+          <div class="form-group" id="mcp-token-group">
+            <label>Token / Key <span style="font-weight:400;color:var(--muted)">(not needed for OAuth)</span></label>
             <input id="mcp-token" type="password" placeholder="..." />
           </div>
         </div>
@@ -746,13 +746,19 @@ CC.views.settings = {
     const transportSelect = document.getElementById('mcp-transport');
     const httpFields = document.getElementById('mcp-http-fields');
     const stdioFields = document.getElementById('mcp-stdio-fields');
+    const authSelect = document.getElementById('mcp-authType');
+    const tokenGroup = document.getElementById('mcp-token-group');
 
     function toggleTransportFields() {
       const isStdio = transportSelect.value === 'stdio';
       httpFields.classList.toggle('hidden', isStdio);
       stdioFields.classList.toggle('hidden', !isStdio);
     }
+    function toggleAuthFields() {
+      tokenGroup.style.display = authSelect.value === 'oauth' ? 'none' : '';
+    }
     transportSelect?.addEventListener('change', toggleTransportFields);
+    authSelect?.addEventListener('change', toggleAuthFields);
 
     document.getElementById('mcp-add')?.addEventListener('click', () => {
       form.classList.toggle('hidden');
@@ -765,7 +771,9 @@ CC.views.settings = {
         form.querySelector('#mcp-args').value = '';
         form.querySelector('#mcp-env').value = '';
         transportSelect.value = 'http';
+        authSelect.value = 'bearer';
         toggleTransportFields();
+        toggleAuthFields();
         document.getElementById('mcp-save').textContent = 'Save';
       }
     });
@@ -826,6 +834,7 @@ CC.views.settings = {
         document.getElementById('mcp-env').value = Object.entries(mcp.env || {}).map(([k, v]) => `${k}=${v}`).join('\n');
         transportSelect.value = mcp.transport || 'http';
         toggleTransportFields();
+        toggleAuthFields();
         document.getElementById('mcp-save').textContent = 'Update';
         form.scrollIntoView({ behavior: 'smooth' });
       });
