@@ -819,7 +819,7 @@ ipcMain.handle('drafts:platformChat', async (_e, draftId, platform, userMessage,
   const sysPrompt = `You are a content promotion expert writing a ${platform} promotional post for an article.
 
 Article content:
-${articleContent.slice(0, 4000)}
+${articleContent}
 
 Platform rules for ${platform}:
 ${JSON.stringify(platformRules, null, 2)}
