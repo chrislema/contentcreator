@@ -588,23 +588,46 @@ CC.views.settings = {
       <div id="mcp-form" class="hidden mcp-form">
         <div class="form-group">
           <label>Name</label>
-          <input id="mcp-name" type="text" placeholder="Payload CMS" />
+          <input id="mcp-name" type="text" placeholder="ContentStudio" />
         </div>
         <div class="form-group">
-          <label>URL</label>
-          <input id="mcp-url" type="text" placeholder="https://cms.chrislema.com" />
-        </div>
-        <div class="form-group">
-          <label>Auth Type</label>
-          <select id="mcp-authType">
-            <option value="bearer">Bearer Token</option>
-            <option value="api-key">API Key</option>
-            <option value="oauth">OAuth</option>
+          <label>Transport Type</label>
+          <select id="mcp-transport">
+            <option value="http">HTTP (URL + Token)</option>
+            <option value="stdio">stdio (Local Command)</option>
           </select>
         </div>
-        <div class="form-group">
-          <label>Token / Key</label>
-          <input id="mcp-token" type="password" placeholder="..." />
+        <div id="mcp-http-fields">
+          <div class="form-group">
+            <label>URL</label>
+            <input id="mcp-url" type="text" placeholder="https://cms.chrislema.com" />
+          </div>
+          <div class="form-group">
+            <label>Auth Type</label>
+            <select id="mcp-authType">
+              <option value="bearer">Bearer Token</option>
+              <option value="api-key">API Key</option>
+              <option value="oauth">OAuth</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Token / Key</label>
+            <input id="mcp-token" type="password" placeholder="..." />
+          </div>
+        </div>
+        <div id="mcp-stdio-fields" class="hidden">
+          <div class="form-group">
+            <label>Command</label>
+            <input id="mcp-command" type="text" placeholder="npx" />
+          </div>
+          <div class="form-group">
+            <label>Args (space-separated)</label>
+            <input id="mcp-args" type="text" placeholder="-y contentstudio-mcp" />
+          </div>
+          <div class="form-group">
+            <label>Env Vars (KEY=value, one per line)</label>
+            <textarea id="mcp-env" rows="3" placeholder="CONTENTSTUDIO_API_KEY=your-key-here"></textarea>
+          </div>
         </div>
         <div style="display:flex;gap:10px">
           <button class="btn-primary btn-sm" id="mcp-save">Save</button>
@@ -638,7 +661,10 @@ CC.views.settings = {
         </div>
       </div>
       <div class="mcp-card-url">
-        ${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}
+        ${m.transport === 'stdio'
+          ? `${CC.escapeHtml(m.command || 'npx')} ${CC.escapeHtml((m.args || []).join(' '))}`
+          : `${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}`
+        }
         ${connected ? ` &middot; <span style="color:var(--accent)">${toolCount} tools</span>` : ''}
         ${m.lastError ? ` &middot; <span style="color:var(--danger)">${CC.escapeHtml(m.lastError)}</span>` : ''}
       </div>
@@ -717,6 +743,17 @@ CC.views.settings = {
 
   initMcps() {
     const form = document.getElementById('mcp-form');
+    const transportSelect = document.getElementById('mcp-transport');
+    const httpFields = document.getElementById('mcp-http-fields');
+    const stdioFields = document.getElementById('mcp-stdio-fields');
+
+    function toggleTransportFields() {
+      const isStdio = transportSelect.value === 'stdio';
+      httpFields.classList.toggle('hidden', isStdio);
+      stdioFields.classList.toggle('hidden', !isStdio);
+    }
+    transportSelect?.addEventListener('change', toggleTransportFields);
+
     document.getElementById('mcp-add')?.addEventListener('click', () => {
       form.classList.toggle('hidden');
       if (!form.classList.contains('hidden')) {
@@ -724,6 +761,11 @@ CC.views.settings = {
         form.querySelector('#mcp-name').value = '';
         form.querySelector('#mcp-url').value = '';
         form.querySelector('#mcp-token').value = '';
+        form.querySelector('#mcp-command').value = '';
+        form.querySelector('#mcp-args').value = '';
+        form.querySelector('#mcp-env').value = '';
+        transportSelect.value = 'http';
+        toggleTransportFields();
         document.getElementById('mcp-save').textContent = 'Save';
       }
     });
@@ -731,25 +773,38 @@ CC.views.settings = {
 
     document.getElementById('mcp-save')?.addEventListener('click', async () => {
       const editId = form.dataset.editId;
+      const transport = transportSelect.value;
       const payload = {
         name: document.getElementById('mcp-name').value,
-        url: document.getElementById('mcp-url').value,
-        authType: document.getElementById('mcp-authType').value,
-        token: document.getElementById('mcp-token').value,
+        transport,
         active: true
       };
+
+      if (transport === 'stdio') {
+        payload.command = document.getElementById('mcp-command').value.trim() || 'npx';
+        payload.args = document.getElementById('mcp-args').value.trim().split(/\s+/).filter(Boolean);
+        // Parse env textarea into object
+        const env = {};
+        document.getElementById('mcp-env').value.split('\n').forEach((line) => {
+          const eq = line.indexOf('=');
+          if (eq > 0) env[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+        });
+        payload.env = env;
+      } else {
+        payload.url = document.getElementById('mcp-url').value;
+        payload.authType = document.getElementById('mcp-authType').value;
+        payload.token = document.getElementById('mcp-token').value;
+      }
+
+      payload.connected = false;
+      payload.toolCount = 0;
+      payload.tools = [];
+
       if (editId) {
-        payload.connected = false;
-        payload.toolCount = 0;
-        payload.tools = [];
-        delete payload.active;
         await CC.api.mcps.update(editId, payload);
         delete form.dataset.editId;
         document.getElementById('mcp-save').textContent = 'Save';
       } else {
-        payload.connected = false;
-        payload.toolCount = 0;
-        payload.tools = [];
         await CC.api.mcps.add(payload);
       }
       await CC.refresh('mcps');
@@ -766,6 +821,11 @@ CC.views.settings = {
         document.getElementById('mcp-url').value = mcp.url || '';
         document.getElementById('mcp-authType').value = mcp.authType || 'bearer';
         document.getElementById('mcp-token').value = mcp.token || '';
+        document.getElementById('mcp-command').value = mcp.command || '';
+        document.getElementById('mcp-args').value = (mcp.args || []).join(' ');
+        document.getElementById('mcp-env').value = Object.entries(mcp.env || {}).map(([k, v]) => `${k}=${v}`).join('\n');
+        transportSelect.value = mcp.transport || 'http';
+        toggleTransportFields();
         document.getElementById('mcp-save').textContent = 'Update';
         form.scrollIntoView({ behavior: 'smooth' });
       });
