@@ -122,7 +122,12 @@ contextBridge.exposeInMainWorld('api', {
     add: (draft) => ipcRenderer.invoke('drafts:add', draft),
     update: (id, patch) => ipcRenderer.invoke('drafts:update', id, patch),
     remove: (id) => ipcRenderer.invoke('drafts:remove', id),
-    generate: (draftId, userMessage) => ipcRenderer.invoke('drafts:generate', draftId, userMessage)
+    generate: (draftId, userMessage) => ipcRenderer.invoke('drafts:generate', draftId, userMessage),
+    generateSummary: (draftId) => ipcRenderer.invoke('drafts:generateSummary', draftId),
+    platformChat: (draftId, platform, message, modelId) => ipcRenderer.invoke('drafts:platformChat', draftId, platform, message, modelId),
+    publishPlatform: (draftId, platform, content) => ipcRenderer.invoke('drafts:publishPlatform', draftId, platform, content),
+    siteChat: (draftId, message, modelId) => ipcRenderer.invoke('drafts:siteChat', draftId, message, modelId),
+    siteExecute: (draftId) => ipcRenderer.invoke('drafts:siteExecute', draftId)
   },
 
   // Distributions

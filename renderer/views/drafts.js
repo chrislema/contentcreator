@@ -50,7 +50,7 @@ CC.views.drafts = {
             ${draft.status === 'drafting'
               ? `<button class="btn-primary btn-sm" data-draft-ready="${draft.id}">Mark Ready</button>`
               : draft.status === 'ready'
-                ? `<button class="btn-ghost btn-sm" data-draft-distribute="${draft.id}">Send to Distribution</button>`
+                ? `<button class="btn-ghost btn-sm" data-draft-ready="${draft.id}">Update Article</button><button class="btn-ghost btn-sm" data-draft-distribute="${draft.id}">Send to Distribution</button>`
                 : ''
             }
             <button class="btn-danger btn-sm" data-draft-remove="${draft.id}">Delete</button>
@@ -257,6 +257,15 @@ CC.views.drafts = {
       if (draft.topicId) {
         await CC.api.topics.update(draft.topicId, { status: 'completed' });
         await CC.refresh('topics');
+      }
+      // Generate model-driven summary only if not already present (idempotent)
+      if (!draft.summary) {
+        CC.showStatus('Generating article summary...');
+        try {
+          await CC.api.drafts.generateSummary(draft.id);
+        } catch (e) {
+          CC.showStatus('Summary generation failed: ' + (e.message || e));
+        }
       }
       await CC.refresh('drafts');
       CC.showStatus('Draft marked ready for distribution');

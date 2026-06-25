@@ -72,17 +72,20 @@ CC.views.topics = {
     const p = t.priority || 3;
     const scores = t.scores;
     const rank = hasScores ? idx + 1 : null;
+    const isCompleted = t.status === 'completed' || t.status === 'published';
 
-    return `<div class="card ${rank === 1 ? 'card-top-ranked' : ''}" data-topic-id="${t.id}">
+    return `<div class="card ${rank === 1 ? 'card-top-ranked' : ''} ${isCompleted ? 'card-completed' : ''}" data-topic-id="${t.id}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div class="card-title">${rank ? `<span class="topic-rank">#${rank}</span> ` : ''}${CC.escapeHtml(t.title)}</div>
-        ${scores
+        ${scores && !isCompleted
           ? `<span class="topic-score"><span class="topic-score-num">${scores.total}</span><span class="topic-score-max">/50</span></span>`
-          : `<span class="priority priority-${p}"><span class="priority-dot"></span> P${p}</span>`
+          : isCompleted
+            ? '<span class="badge ok">Completed</span>'
+            : `<span class="priority priority-${p}"><span class="priority-dot"></span> P${p}</span>`
         }
       </div>
       <div class="card-desc">${CC.escapeHtml(t.angle || '')}</div>
-      ${scores ? `<div class="topic-scores-bar">
+      ${scores && !isCompleted ? `<div class="topic-scores-bar">
         <span class="topic-score-pill" title="Search Demand: Backed by real GSC query volume">Search ${scores.searchDemand}</span>
         <span class="topic-score-pill" title="Performance Potential: Aligned with proven GA traffic patterns">Traffic ${scores.performancePotential}</span>
         <span class="topic-score-pill" title="Content Gap: Not already covered in your content library">Gap ${scores.contentGap}</span>
@@ -95,11 +98,11 @@ CC.views.topics = {
         ${(t.cmsTags || []).map((tag) => `<span class="badge">${CC.escapeHtml(tag)}</span>`).join('')}
         <span class="badge dim">${CC.escapeHtml(t.status || 'idea')}</span>
       </div>
-      <div class="topic-actions-row">
+      ${isCompleted ? '' : `<div class="topic-actions-row">
         <button class="btn-primary btn-sm" data-topic-draft="${t.id}">Draft</button>
         <button class="btn-ghost btn-sm" data-topic-edit="${t.id}">Edit</button>
         <button class="btn-danger btn-sm" data-topic-remove="${t.id}">Delete</button>
-      </div>
+      </div>`}
     </div>`;
   },
 

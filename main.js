@@ -769,6 +769,172 @@ ipcMain.handle('drafts:remove', (_e, id) => {
   return draftsStore.list();
 });
 
+// Generate a model-driven summary for a draft's article
+ipcMain.handle('drafts:generateSummary', async (_e, draftId) => {
+  const draft = draftsStore.get(draftId);
+  if (!draft) throw new Error('Draft not found');
+
+  const s = settingsStore.get();
+  const model = (s.models || []).find((m) => m.id === s.defaultModelId);
+  if (!model) throw new Error('Set a default model in Settings first.');
+
+  const content = draft.content || '';
+  if (!content || content.length < 50) throw new Error('No article content to summarize');
+
+  status('Generating summary...');
+  const response = await chatCompletion(model, [
+    { role: 'system', content: 'You are analyzing a blog post to create a concise summary. Write 2-3 sentences that capture the post\'s specific topic, core argument, and key conclusion. Focus on what makes THIS post unique - the angle, the insight, the specific advice given. Do NOT write a generic description. Write as if explaining to another content strategist what this article covers. Return ONLY the summary text, no preamble.' },
+    { role: 'user', content: content.slice(0, 6000) }
+  ], 256);
+
+  const summary = response.trim().replace(/^["']|["']$/g, '');
+  const updated = draftsStore.add({ ...draft, summary });
+  status('Summary generated');
+  return updated;
+});
+
+// Generate/continue a platform-specific promotional post conversation
+ipcMain.handle('drafts:platformChat', async (_e, draftId, platform, userMessage, modelId) => {
+  const draft = draftsStore.get(draftId);
+  if (!draft) throw new Error('Draft not found');
+
+  const s = settingsStore.get();
+  const model = (s.models || []).find((m) => m.id === modelId) || (s.models || []).find((m) => m.id === s.defaultModelId);
+  if (!model) throw new Error('Set a default model in Settings first.');
+
+  const articleContent = draft.content || '';
+  if (!articleContent) throw new Error('No article content. Mark the draft ready first.');
+
+  const platformProfile = platformProfilesStore.list().find((p) => p.isDefault) || platformProfilesStore.list()[0];
+  const platformRules = platformProfile?.platforms?.[platform] || {};
+  const voice = voiceProfilesStore.list().find((v) => v.isDefault) || voiceProfilesStore.list()[0];
+
+  // Get or create the platform post record
+  const platformPosts = draft.platformPosts || {};
+  const record = platformPosts[platform] || { conversation: [], publishedAt: null, modelId };
+
+  // Append user message
+  record.conversation = [...record.conversation, { role: 'user', content: userMessage }];
+
+  const sysPrompt = `You are a content promotion expert writing a ${platform} promotional post for an article.
+
+Article content:
+${articleContent.slice(0, 4000)}
+
+Platform rules for ${platform}:
+${JSON.stringify(platformRules, null, 2)}
+
+Voice: ${voice?.name || 'default'} - ${voice?.identity || ''}
+
+Write a single, ready-to-post ${platform} promotional message. No preamble, no explanation. Just the post.`;
+
+  status(`Drafting ${platform} post...`);
+  const response = await chatCompletion(model, [
+    { role: 'system', content: sysPrompt },
+    ...record.conversation
+  ], 2048, { modelId: model.id });
+
+  record.conversation = [...record.conversation, { role: 'assistant', content: response }];
+  record.modelId = modelId;
+  platformPosts[platform] = record;
+  draftsStore.add({ ...draft, platformPosts });
+
+  status(`${platform} post drafted`);
+  return draftsStore.get(draftId);
+});
+
+// Save the final platform post content and mark published
+ipcMain.handle('drafts:publishPlatform', async (_e, draftId, platform, content) => {
+  const draft = draftsStore.get(draftId);
+  if (!draft) throw new Error('Draft not found');
+
+  const platformPosts = draft.platformPosts || {};
+  platformPosts[platform] = {
+    ...(platformPosts[platform] || {}),
+    content,
+    publishedAt: new Date().toISOString()
+  };
+  const updated = draftsStore.add({ ...draft, platformPosts });
+  status(`Published to ${platform}`);
+  return updated;
+});
+
+// Chat about publishing to site - Claude (via CLI) plans with the user
+ipcMain.handle('drafts:siteChat', async (_e, draftId, message, modelId) => {
+  const draft = draftsStore.get(draftId);
+  if (!draft) throw new Error('Draft not found');
+
+  const s = settingsStore.get();
+  const model = (s.models || []).find((m) => m.id === modelId) || (s.models || []).find((m) => m.id === s.defaultModelId);
+  if (!model) throw new Error('Set a default model in Settings first.');
+
+  const payloadMcp = (s.mcps || []).find((m) => m.connected && m.name && m.name.toLowerCase().includes('payload'));
+
+  const articleContent = draft.content || '';
+  const title = articleContent.match(/^#\s+(.+)$/m)?.[1]?.trim() || draft.title;
+  const summary = draft.summary || '';
+
+  // Discover MCP tools so Claude knows what it can call
+  let toolsContext = 'Payload CMS MCP is not connected. The user will need to connect it in Settings.';
+  if (payloadMcp) {
+    try {
+      const toolListResult = await connectMcp(payloadMcp);
+      const tools = toolListResult.tools || [];
+      toolsContext = `Payload CMS MCP is connected with ${tools.length} tools:\n${tools.map((t) => `- ${t.name}: ${t.description}`).join('\n')}`;
+    } catch (e) {
+      toolsContext = `Payload CMS MCP connection error: ${e.message}`;
+    }
+  }
+
+  // Get or create site conversation
+  const siteConversation = draft.siteConversation || [];
+  const updatedConv = [...siteConversation, { role: 'user', content: message }];
+
+  const isFirst = siteConversation.length === 0;
+  const sysPrompt = `You are helping the user publish a blog post to their Payload CMS site.
+
+Article title: ${title}
+Summary: ${summary}
+
+Article (markdown):
+${articleContent.slice(0, 5000)}
+
+${toolsContext}
+
+You have direct access to the Payload CMS MCP tools. Use them freely during this conversation:
+- Call find_posts to inspect existing posts and understand the field schema (content format, how tags are stored, meta/SEO fields, etc.)
+- Discuss what you find with the user
+- When the user confirms, call create_posts to publish the article
+
+Do NOT produce a JSON plan for someone else to execute. You execute the tools yourself during this chat. Talk through what you're doing in plain language as you go, so the user can follow along and adjust.`;
+
+  status('Chatting with model about site publish...');
+  const response = await chatCompletion(model, [
+    { role: 'system', content: sysPrompt },
+    ...updatedConv
+  ], 4096, { modelId: model.id, enableTools: true });
+
+  const finalConv = [...updatedConv, { role: 'assistant', content: response }];
+  draftsStore.add({ ...draft, siteConversation: finalConv, siteModelId: modelId });
+
+  status('Ready');
+  return draftsStore.get(draftId);
+});
+
+// Mark the draft as published to site (Claude does the actual publish during chat via CLI+MCP)
+ipcMain.handle('drafts:siteExecute', async (_e, draftId) => {
+  const draft = draftsStore.get(draftId);
+  if (!draft) throw new Error('Draft not found');
+
+  const updated = draftsStore.add({
+    ...draft,
+    sitePublishedAt: new Date().toISOString()
+  });
+
+  status('Marked published to site');
+  return { success: true };
+});
+
 // Generate/continue a draft using the model
 ipcMain.handle('drafts:generate', async (_e, draftId, userMessage) => {
   const draft = draftsStore.get(draftId);
