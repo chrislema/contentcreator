@@ -41,13 +41,18 @@ CC.views.drafts = {
         ${listHtml}
       </div>
       <div class="draft-workspace">
-        <div style="padding:14px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <div class="draft-header">
           <div>
             <div style="font-size:15px;font-weight:700">${CC.escapeHtml(draft.title)}</div>
-            <div style="font-size:12px;color:var(--muted)">${draft.status === 'published' ? 'Published' : 'Drafting'}</div>
+            <div style="font-size:12px;color:var(--muted)">${draft.status === 'published' ? 'Published' : draft.status === 'ready' ? 'Ready for distribution' : 'Drafting'}</div>
           </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn-ghost btn-sm" data-draft-distribute="${draft.id}" ${draft.status !== 'published' ? '' : 'disabled'}>Mark Published &amp; Distribute</button>
+          <div class="draft-header-actions">
+            ${draft.status === 'drafting'
+              ? `<button class="btn-primary btn-sm" data-draft-ready="${draft.id}">Mark Ready</button>`
+              : draft.status === 'ready'
+                ? `<button class="btn-ghost btn-sm" data-draft-distribute="${draft.id}">Send to Distribution</button>`
+                : ''
+            }
             <button class="btn-danger btn-sm" data-draft-remove="${draft.id}">Delete</button>
           </div>
         </div>
@@ -116,6 +121,147 @@ CC.views.drafts = {
         <button class="btn-ghost btn-sm" id="nd-cancel">Cancel</button>
       </div>
     </div>`;
+  },
+
+  // Extract article - picks the longest assistant message that looks like an article
+  // (has headings or is substantially longer than average)
+  extractArticle(draft) {
+    if (draft.content && draft.content.length > 200) return draft.content;
+
+    const conv = draft.conversation || [];
+    const assistantMsgs = conv.filter((m) => m.role === 'assistant');
+    if (assistantMsgs.length === 0) return draft.content || '';
+
+    // Default to the longest assistant message
+    let best = assistantMsgs[0];
+    for (const m of assistantMsgs) {
+      if (m.content.length > best.content.length) best = m;
+    }
+    return this.cleanArticle(best.content);
+  },
+
+  cleanArticle(text) {
+    let article = text;
+
+    // Strip content between leading chatter and first heading/hr
+    // If the article has --- or # markers, start from there
+    const headingIdx = article.search(/^#{1,3}\s/m);
+    const hrIdx = article.indexOf('\n---');
+    const cutIdx = Math.min(
+      headingIdx >= 0 ? headingIdx : Infinity,
+      hrIdx >= 0 ? hrIdx : Infinity
+    );
+    if (cutIdx !== Infinity && cutIdx > 0 && cutIdx < 500) {
+      article = article.slice(cutIdx).replace(/^[\s---]+/, '');
+    }
+
+    // Strip trailing chatter after the last --- closer
+    const lastHr = article.lastIndexOf('\n---');
+    if (lastHr >= 0 && lastHr > article.length - 200) {
+      const afterHr = article.slice(lastHr + 4).trim();
+      // If there's substantial text after the last ---, it's likely postamble
+      if (afterHr.length > 20 && afterHr.length < 500) {
+        article = article.slice(0, lastHr).trim();
+      }
+    }
+
+    // Strip common postambles
+    const postambles = [
+      /\n+(that'?s the (?:finished|final|complete)[^\n]*\.?)$/i,
+      /\n+(want me to (?:make|swap|adjust|change)[^\n]*\??)$/i,
+      /\n+(let me know (?:what|if|how)[^\n]*\.?)$/i,
+      /\n+(how does this look\??)$/i,
+      /\n+(would you like me to (?:adjust|revise|change|add)[^\n]*\??)$/i,
+      /\n+(hope this helps!?)$/i,
+      /\n+(feel free to (?:adjust|edit|tweak|modify)[^\n]*\.?)$/i,
+      /\n+(what do you think\??)$/i,
+      /\n+(one thing i'?ll flag[^\n]*\.?)$/i,
+    ];
+    for (const re of postambles) {
+      article = article.replace(re, '');
+    }
+
+    return article.trim();
+  },
+
+  showReadyModal(draft) {
+    const conv = draft.conversation || [];
+    const assistantMsgs = conv.filter((m) => m.role === 'assistant');
+
+    // Build a dedicated full-screen modal instead of reusing existing-modal
+    let modal = document.getElementById('ready-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'ready-modal';
+      modal.className = 'modal-overlay';
+      document.body.appendChild(modal);
+    }
+
+    const defaultArticle = this.extractArticle(draft);
+
+    modal.innerHTML = `<div class="modal ready-modal">
+      <div class="modal-header">
+        <h3>Review Article: ${CC.escapeHtml(draft.title)}</h3>
+        <button class="btn-ghost btn-sm" id="ready-modal-close">Close</button>
+      </div>
+      <div class="ready-modal-body">
+        <div class="ready-modal-sidebar">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-2);font-weight:700;margin-bottom:10px">AI Responses (${assistantMsgs.length})</div>
+          <div class="ready-version-list">
+            ${assistantMsgs.map((m, i) => {
+              const preview = m.content.slice(0, 80).replace(/\n/g, ' ');
+              const len = m.content.length;
+              const hasHeading = /^#{1,3}\s/m.test(m.content);
+              return `<div class="ready-version-item ${m.content === defaultArticle ? 'active' : ''}" data-version-idx="${i}">
+                <div class="ready-version-label">${i + 1}. ${hasHeading ? '<span class="badge accent" style="font-size:9px">Article</span>' : ''} ${len} chars</div>
+                <div class="ready-version-preview">${CC.escapeHtml(preview)}...</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+        <div class="ready-modal-editor">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-2);font-weight:700;margin-bottom:8px">Article Content (editable)</div>
+          <textarea id="ready-article-text" class="ready-article-editor">${CC.escapeHtml(defaultArticle)}</textarea>
+          <div class="ready-modal-actions">
+            <button class="btn-primary btn-sm" id="ready-confirm">Mark Ready &amp; Save</button>
+            <button class="btn-ghost btn-sm" id="ready-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    modal.classList.remove('hidden');
+
+    // Version picker
+    modal.querySelectorAll('[data-version-idx]').forEach((el) => {
+      el.addEventListener('click', () => {
+        modal.querySelectorAll('.ready-version-item').forEach((e) => e.classList.remove('active'));
+        el.classList.add('active');
+        const idx = parseInt(el.dataset.versionIdx);
+        const cleaned = this.cleanArticle(assistantMsgs[idx].content);
+        const editor = document.getElementById('ready-article-text');
+        editor.value = cleaned;
+      });
+    });
+
+    modal.querySelector('#ready-modal-close')?.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+    modal.querySelector('#ready-cancel')?.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+
+    modal.querySelector('#ready-confirm')?.addEventListener('click', async () => {
+      const content = document.getElementById('ready-article-text').value.trim();
+      modal.classList.add('hidden');
+      await CC.api.drafts.update(draft.id, { status: 'ready', content });
+      if (draft.topicId) {
+        await CC.api.topics.update(draft.topicId, { status: 'completed' });
+        await CC.refresh('topics');
+      }
+      await CC.refresh('drafts');
+      CC.showStatus('Draft marked ready for distribution');
+      CC.navigate('drafts');
+    });
   },
 
   init() {
@@ -238,11 +384,17 @@ CC.views.drafts = {
       });
     });
 
+    document.querySelectorAll('[data-draft-ready]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const draft = CC.state.drafts.find((d) => d.id === btn.dataset.draftReady);
+        if (!draft) return;
+        self.showReadyModal(draft);
+      });
+    });
+
     document.querySelectorAll('[data-draft-distribute]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const draftId = btn.dataset.draftDistribute;
-        await CC.api.drafts.update(draftId, { status: 'published' });
-        await CC.refresh('drafts');
         CC.views.distributions.selectedDraftId = draftId;
         CC.navigate('distributions');
       });

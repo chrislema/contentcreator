@@ -863,8 +863,13 @@ ipcMain.handle('distributions:generate', async (_e, draftId, platforms, modelId)
   if (!draft) throw new Error('Draft not found');
 
   const s = settingsStore.get();
-  const model = (s.models || []).find((m) => m.id === modelId);
+  const model = (s.models || []).find((m) => m.id === modelId) || (s.models || []).find((m) => m.id === s.defaultModelId);
   if (!model) throw new Error('Model not found');
+
+  // Get clean article content - last assistant message or content field
+  const articleContent = draft.content
+    || [...(draft.conversation || [])].reverse().find((m) => m.role === 'assistant')?.content
+    || '';
 
   const platformProfile = platformProfilesStore.list().find((p) => p.isDefault) || platformProfilesStore.list()[0];
   const voice = voiceProfilesStore.list().find((v) => v.isDefault) || voiceProfilesStore.list()[0];
@@ -881,7 +886,7 @@ ipcMain.handle('distributions:generate', async (_e, draftId, platforms, modelId)
   const sysPrompt = `You are a content promotion expert. Adapt this article into platform-native promotional posts.
 
 Article content:
-${draft.content || draft.conversation?.filter(c => c.role === 'assistant').pop()?.content || ''}
+${articleContent}
 
 Platform rules:
 ${JSON.stringify(platformRules, null, 2)}
