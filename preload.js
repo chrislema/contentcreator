@@ -127,7 +127,9 @@ contextBridge.exposeInMainWorld('api', {
     platformChat: (draftId, platform, message, modelId) => ipcRenderer.invoke('drafts:platformChat', draftId, platform, message, modelId),
     publishPlatform: (draftId, platform, content) => ipcRenderer.invoke('drafts:publishPlatform', draftId, platform, content),
     siteChat: (draftId, message, modelId) => ipcRenderer.invoke('drafts:siteChat', draftId, message, modelId),
-    siteExecute: (draftId) => ipcRenderer.invoke('drafts:siteExecute', draftId)
+    siteExecute: (draftId) => ipcRenderer.invoke('drafts:siteExecute', draftId),
+    newsletterChat: (draftId, message, modelId) => ipcRenderer.invoke('drafts:newsletterChat', draftId, message, modelId),
+    newsletterExecute: (draftId) => ipcRenderer.invoke('drafts:newsletterExecute', draftId)
   },
 
   // Distributions

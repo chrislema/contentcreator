@@ -27,6 +27,7 @@ CC.views.distributions = {
 
   PLATFORMS: [
     { id: 'site', label: 'Site', long: 'Website' },
+    { id: 'newsletter', label: 'Newsletter', long: 'Newsletter' },
     { id: 'facebook', label: 'Facebook', long: 'Facebook' },
     { id: 'twitter', label: 'X', long: 'Twitter/X' },
     { id: 'linkedin', label: 'LinkedIn', long: 'LinkedIn' }
@@ -83,6 +84,9 @@ CC.views.distributions = {
             <button class="btn-primary btn-sm" data-open-panel="${d.id}" data-platform="site" ${d.sitePublishedAt ? 'disabled' : ''}>
               ${d.sitePublishedAt ? 'Published to Site' : 'Publish to Site'}
             </button>
+            <button class="btn-primary btn-sm" data-open-panel="${d.id}" data-platform="newsletter" ${d.newsletterPublishedAt ? 'disabled' : ''}>
+              ${d.newsletterPublishedAt ? 'Sent to Newsletter' : 'Send Newsletter'}
+            </button>
             <button class="btn-ghost btn-sm" data-open-panel="${d.id}" data-platform="facebook">Draft FB Post</button>
             <button class="btn-ghost btn-sm" data-open-panel="${d.id}" data-platform="twitter">Draft X Post</button>
             <button class="btn-ghost btn-sm" data-open-panel="${d.id}" data-platform="linkedin">Draft LinkedIn Post</button>
@@ -95,42 +99,56 @@ CC.views.distributions = {
 
   renderPanel(d, platform) {
     const platLabel = this.PLATFORMS.find((p) => p.id === platform)?.long || platform;
-    const isSite = platform === 'site';
+    const isMcpChat = platform === 'site' || platform === 'newsletter';
 
     let conversation = [];
-    if (isSite) {
+    if (platform === 'site') {
       conversation = d.siteConversation || [];
+    } else if (platform === 'newsletter') {
+      conversation = d.newsletterConversation || [];
     } else {
       conversation = d.platformPosts?.[platform]?.conversation || [];
     }
 
     const hasMessages = conversation.length > 0;
+    const emptyHint = platform === 'site'
+      ? 'Tell the model how to publish: tags, description, date...'
+      : platform === 'newsletter'
+        ? 'e.g., Create a broadcast from this article. Subject: <subject>. Send to my subscribers.'
+        : 'Ask the model to write a ' + platLabel + ' post.';
+    const placeholder = platform === 'site'
+      ? 'e.g., Use AI and content-strategy as tags. Description: ' + (d.summary || '...') + '. Date it today. Ignore featured image.'
+      : platform === 'newsletter'
+        ? 'e.g., Create a broadcast with subject "New Post: ...". Use the article summary as preview text.'
+        : 'Message the model about the ' + platLabel + ' post...';
 
     return `<div class="dist-panel">
       <div class="dist-panel-header">
         <div class="dist-panel-header-left">
           <span class="badge accent">${platLabel}</span>
-          <span style="font-size:12px;color:var(--muted)">Chat with the model to ${isSite ? 'plan the publish' : 'draft the post'}</span>
+          <span style="font-size:12px;color:var(--muted)">Chat with the model to ${isMcpChat ? 'plan the send' : 'draft the post'}</span>
         </div>
         <button class="btn-ghost btn-sm" data-panel-close="${d.id}">Close</button>
       </div>
       <div class="dist-panel-chat" id="dist-conv-${d.id}-${platform}">
         ${hasMessages
           ? conversation.map((m) => this.renderMsg(m, d)).join('')
-          : `<div class="empty-state" style="padding:30px"><p>No messages yet.</p><p class="muted">${isSite ? 'Tell the model how to publish: tags, description, date...' : 'Ask the model to write a ' + platLabel + ' post.'}</p></div>`
+          : `<div class="empty-state" style="padding:30px"><p>No messages yet.</p><p class="muted">${emptyHint}</p></div>`
         }
       </div>
       <div class="dist-panel-toolbar">
         <div class="dist-panel-input-row">
-          <textarea class="dist-panel-input" id="dist-input-${d.id}-${platform}" placeholder="${isSite ? 'e.g., Use AI and content-strategy as tags. Description: ' + (d.summary || '...') + '. Date it today. Ignore featured image.' : 'Message the model about the ' + platLabel + ' post...'}" rows="2"></textarea>
+          <textarea class="dist-panel-input" id="dist-input-${d.id}-${platform}" placeholder="${CC.escapeHtml(placeholder)}" rows="2"></textarea>
           <button class="btn-primary btn-sm" data-panel-send="${d.id}" data-platform="${platform}">Send</button>
         </div>
         <div class="dist-panel-toolbar-bottom">
           ${this.renderModelSelector(d.id, platform)}
           ${hasMessages ? `<div class="dist-panel-execute">
-            ${isSite
+            ${platform === 'site'
               ? `<button class="btn-primary btn-sm" data-site-execute="${d.id}" ${d.sitePublishedAt ? 'disabled' : ''}>${d.sitePublishedAt ? 'Published to Site' : 'Mark Published to Site'}</button>`
-              : `<button class="btn-primary btn-sm" data-platform-publish="${d.id}" data-platform="${platform}">Publish to ${platLabel}</button>`
+              : platform === 'newsletter'
+                ? `<button class="btn-primary btn-sm" data-newsletter-execute="${d.id}" ${d.newsletterPublishedAt ? 'disabled' : ''}>${d.newsletterPublishedAt ? 'Already Sent' : 'Mark Sent'}</button>`
+                : `<button class="btn-primary btn-sm" data-platform-publish="${d.id}" data-platform="${platform}">Publish to ${platLabel}</button>`
             }
           </div>` : ''}
         </div>
@@ -142,6 +160,8 @@ CC.views.distributions = {
     let publishedAt = null;
     if (p.id === 'site') {
       publishedAt = d.sitePublishedAt;
+    } else if (p.id === 'newsletter') {
+      publishedAt = d.newsletterPublishedAt;
     } else {
       publishedAt = d.platformPosts?.[p.id]?.publishedAt;
     }
@@ -156,7 +176,7 @@ CC.views.distributions = {
   },
 
   renderMsg(m, draft) {
-    const modelId = draft.siteModelId || draft.modelId;
+    const modelId = draft.newsletterModelId || draft.siteModelId || draft.modelId;
     const roleName = CC.state.models.find((mo) => mo.id === modelId)?.displayName || 'AI';
     if (m.role === 'user') {
       return `<div class="msg user"><div class="msg-role user">You</div><div class="msg-content">${CC.escapeHtml(m.content)}</div></div>`;
@@ -270,6 +290,8 @@ CC.views.distributions = {
         try {
           if (platform === 'site') {
             await CC.api.drafts.siteChat(draftId, msg, modelId);
+          } else if (platform === 'newsletter') {
+            await CC.api.drafts.newsletterChat(draftId, msg, modelId);
           } else {
             await CC.api.drafts.platformChat(draftId, platform, msg, modelId);
           }
@@ -315,7 +337,27 @@ CC.views.distributions = {
           CC.setStickyStatus(false);
           CC.showStatus('Failed: ' + e.message);
           btn.disabled = false;
-          btn.textContent = 'Execute Publish via MCP';
+          btn.textContent = 'Mark Published to Site';
+        }
+      });
+    });
+
+    // Mark newsletter sent (Claude does the actual broadcast via Kit MCP during chat)
+    document.querySelectorAll('[data-newsletter-execute]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = 'Marking...';
+        try {
+          await CC.api.drafts.newsletterExecute(btn.dataset.newsletterExecute);
+          delete self.openPanels[btn.dataset.newsletterExecute];
+          await CC.refresh('drafts');
+          CC.showStatus('Newsletter marked sent');
+          CC.navigate('distributions');
+        } catch (e) {
+          CC.showStatus('Failed: ' + e.message);
+          btn.disabled = false;
+          btn.textContent = 'Mark Sent';
         }
       });
     });

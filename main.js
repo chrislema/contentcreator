@@ -992,10 +992,11 @@ You have direct access to the Payload CMS MCP tools. Use them freely during this
 Do NOT produce a JSON plan for someone else to execute. You execute the tools yourself during this chat. Talk through what you're doing in plain language as you go, so the user can follow along and adjust.`;
 
   status('Chatting with model about site publish...');
+  const siteMcps = (s.mcps || []).filter((m) => m.connected && /payload|cms/i.test(m.name));
   const response = await chatCompletion(model, [
     { role: 'system', content: sysPrompt },
     ...updatedConv
-  ], 4096, { modelId: model.id, enableTools: true });
+  ], 4096, { modelId: model.id, enableTools: true, mcps: siteMcps });
 
   const finalConv = [...updatedConv, { role: 'assistant', content: response }];
   draftsStore.add({ ...draft, siteConversation: finalConv, siteModelId: modelId });
@@ -1015,6 +1016,80 @@ ipcMain.handle('drafts:siteExecute', async (_e, draftId) => {
   });
 
   status('Marked published to site');
+  return { success: true };
+});
+
+// Chat about sending newsletter via Kit MCP
+ipcMain.handle('drafts:newsletterChat', async (_e, draftId, message, modelId) => {
+  const draft = draftsStore.get(draftId);
+  if (!draft) throw new Error('Draft not found');
+
+  const s = settingsStore.get();
+  const model = (s.models || []).find((m) => m.id === modelId) || (s.models || []).find((m) => m.id === s.defaultModelId);
+  if (!model) throw new Error('Set a default model in Settings first.');
+
+  const kitMcp = (s.mcps || []).find((m) => m.connected && /kit/i.test(m.name));
+
+  const articleContent = draft.content || '';
+  const title = articleContent.match(/^#\s+(.+)$/m)?.[1]?.trim() || draft.title;
+  const summary = draft.summary || '';
+
+  let toolsContext = 'Kit MCP is not connected. The user will need to connect it in Settings.';
+  if (kitMcp) {
+    try {
+      const toolListResult = await connectMcp(kitMcp);
+      const tools = toolListResult.tools || [];
+      toolsContext = `Kit MCP is connected with ${tools.length} tools:\n${tools.map((t) => `- ${t.name}: ${t.description}`).join('\n')}`;
+    } catch (e) {
+      toolsContext = `Kit MCP connection error: ${e.message}`;
+    }
+  }
+
+  const newsletterConversation = draft.newsletterConversation || [];
+  const updatedConv = [...newsletterConversation, { role: 'user', content: message }];
+
+  const sysPrompt = `You are helping the user send a newsletter broadcast via Kit (ConvertKit) about a new blog post.
+
+Article title: ${title}
+Summary: ${summary}
+
+Article (markdown):
+${articleContent.slice(0, 5000)}
+
+${toolsContext}
+
+You have direct access to the Kit MCP tools. Use them freely during this conversation:
+- List broadcasts, tags, subscribers to understand the account
+- Create a broadcast with subject, preview text, and email content (you can link to the article)
+- Discuss the plan with the user before sending
+
+Talk through what you're doing in plain language as you go, so the user can follow along and adjust.`;
+
+  status('Chatting with model about newsletter...');
+  const newsletterMcps = (s.mcps || []).filter((m) => m.connected && /kit/i.test(m.name));
+  const response = await chatCompletion(model, [
+    { role: 'system', content: sysPrompt },
+    ...updatedConv
+  ], 4096, { modelId: model.id, enableTools: true, mcps: newsletterMcps });
+
+  const finalConv = [...updatedConv, { role: 'assistant', content: response }];
+  draftsStore.add({ ...draft, newsletterConversation: finalConv, newsletterModelId: modelId });
+
+  status('Ready');
+  return draftsStore.get(draftId);
+});
+
+// Mark the draft as newsletter sent
+ipcMain.handle('drafts:newsletterExecute', async (_e, draftId) => {
+  const draft = draftsStore.get(draftId);
+  if (!draft) throw new Error('Draft not found');
+
+  const updated = draftsStore.add({
+    ...draft,
+    newsletterPublishedAt: new Date().toISOString()
+  });
+
+  status('Marked newsletter sent');
   return { success: true };
 });
 
