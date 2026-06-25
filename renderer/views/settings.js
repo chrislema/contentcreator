@@ -931,10 +931,13 @@ CC.views.settings = {
       return this.existingSort === 'date-asc' ? da - db : db - da;
     });
 
+    const analyzedCount = articles.filter((a) => a.analysis).length;
+
     return `<div class="mcp-section">
       <div class="existing-import-row">
         <button class="btn-primary btn-sm" id="existing-import">+ Import Articles</button>
         <button class="btn-ghost btn-sm" id="existing-sync-mcp">Update with MCP</button>
+        <button class="btn-ghost btn-sm" id="existing-analyze" ${analyzedCount === articles.length && articles.length > 0 ? 'disabled' : ''}>${analyzedCount === articles.length && articles.length > 0 ? 'Summaries Ready' : `Generate Summaries${analyzedCount > 0 ? ` (${analyzedCount}/${articles.length})` : ''}`}</button>
       </div>
       <div class="existing-controls">
         <select id="existing-tag-filter" class="existing-select">
@@ -1007,6 +1010,23 @@ CC.views.settings = {
         CC.showStatus('Sync failed: ' + e.message);
         btn.disabled = false;
         btn.textContent = 'Update with MCP';
+      }
+    });
+
+    document.getElementById('existing-analyze')?.addEventListener('click', async () => {
+      const btn = document.getElementById('existing-analyze');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = 'Analyzing...';
+      CC.setStickyStatus(true);
+      CC.showStatus('Starting article analysis...');
+      try {
+        await CC.api.existing.analyze();
+      } catch (e) {
+        CC.setStickyStatus(false);
+        CC.showStatus('Analysis failed: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Generate Summaries';
       }
     });
 

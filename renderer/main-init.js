@@ -44,6 +44,17 @@
     if (btn) { btn.disabled = false; btn.textContent = 'Generate Topics'; }
   });
 
+  // Article analysis completion listener
+  CC.api.onAnalyzed((data) => {
+    CC.setStickyStatus(false);
+    CC.showStatus(`Analysis complete: ${data.done}/${data.total} articles summarized`);
+    CC.refresh('existing').then(() => {
+      if (CC.state.currentView === 'settings') {
+        CC.navigate('settings');
+      }
+    });
+  });
+
   // Navigate to default view
   CC.navigate('settings');
 })();

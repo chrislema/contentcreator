@@ -569,6 +569,62 @@ ipcMain.handle('existing:syncMcp', async () => {
   return { tagsUpdated, imported, total: allPosts.length };
 });
 
+// Generate AI analysis summaries for all existing content
+ipcMain.handle('existing:analyze', async () => {
+  const s = settingsStore.get();
+  const model = (s.models || []).find((m) => m.id === s.defaultModelId);
+  if (!model) throw new Error('Set a default model in Settings first.');
+
+  const articles = existingContentStore.list();
+  const toAnalyze = articles.filter((a) => !a.analysis);
+
+  if (toAnalyze.length === 0) {
+    status('All articles already analyzed');
+    return { analyzed: 0, total: articles.length };
+  }
+
+  // Start in background
+  analyzeArticlesInBackground(toAnalyze, model);
+
+  status(`Analyzing ${toAnalyze.length} articles... (this will take a while)`);
+  return { started: true, count: toAnalyze.length };
+});
+
+async function analyzeArticlesInBackground(articles, model) {
+  let done = 0;
+  const total = articles.length;
+
+  for (const article of articles) {
+    try {
+      status(`Analyzing article ${done + 1}/${total}: ${article.title.slice(0, 50)}...`);
+
+      // Truncate body to keep prompt reasonable
+      const bodyText = (article.body || article.excerpt || '').slice(0, 4000);
+
+      const response = await chatCompletion(model, [
+        { role: 'system', content: 'You are analyzing a blog post to create a concise summary. Write 2-3 sentences that capture the post\'s specific topic, core argument, and key conclusion. Focus on what makes THIS post unique - the angle, the insight, the specific advice given. Do NOT write a generic description. Write as if explaining to another content strategist what this article covers. Return ONLY the summary text, no preamble.' },
+        { role: 'user', content: `Title: ${article.title}\n\nTags: ${(article.tags || []).join(', ')}\n\nBody:\n${bodyText}` }
+      ], 256);
+
+      // Clean and save
+      const analysis = response.trim().replace(/^["']|["']$/g, '');
+      existingContentStore.add({
+        ...article,
+        analysis
+      });
+      done++;
+    } catch (e) {
+      logError('existing:analyze:' + article.id, e);
+      done++;
+    }
+  }
+
+  status(`Analysis complete: ${done}/${total} articles summarized`);
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('existing:analyzed', { done, total });
+  }
+}
+
 // ── IPC: Topics ──────────────────────────────────────────────────
 ipcMain.handle('topics:list', () => topicsStore.list());
 ipcMain.handle('topics:add', (_e, topic) => {

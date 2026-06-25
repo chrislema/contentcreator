@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('topics:failed', handler);
   },
 
+  onAnalyzed: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on('existing:analyzed', handler);
+    return () => ipcRenderer.removeListener('existing:analyzed', handler);
+  },
+
   // Settings
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
@@ -91,7 +97,8 @@ contextBridge.exposeInMainWorld('api', {
     update: (id, patch) => ipcRenderer.invoke('existing:update', id, patch),
     remove: (id) => ipcRenderer.invoke('existing:remove', id),
     importFiles: () => ipcRenderer.invoke('existing:importFiles'),
-    syncMcp: () => ipcRenderer.invoke('existing:syncMcp')
+    syncMcp: () => ipcRenderer.invoke('existing:syncMcp'),
+    analyze: () => ipcRenderer.invoke('existing:analyze')
   },
 
   // Import
