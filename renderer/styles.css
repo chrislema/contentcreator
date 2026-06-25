@@ -1023,6 +1023,38 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 32px;
 }
 
+.dist-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dist-url-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dist-url-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font-family: monospace;
+}
+
+.dist-url-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .dist-article-summary {
   cursor: pointer;
   font-size: 12px;

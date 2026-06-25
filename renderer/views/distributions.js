@@ -75,6 +75,11 @@ CC.views.distributions = {
             <summary class="dist-article-summary">View full article</summary>
             <div class="dist-article-preview">${CC.escapeHtml(article)}</div>
           </details>
+          <div class="dist-url-row">
+            <label class="dist-url-label">Public URL</label>
+            <input class="dist-url-input" id="dist-url-${d.id}" value="${CC.escapeHtml(d.publicUrl || '')}" placeholder="https://chrislema.com/your-slug" data-url-input="${d.id}" />
+            <button class="btn-ghost btn-sm" data-url-save="${d.id}">Save</button>
+          </div>
         </div>
         <div class="dist-card-right">
           <div class="dist-status-list">
@@ -205,6 +210,27 @@ CC.views.distributions = {
 
   init() {
     const self = this;
+
+    // Save public URL
+    document.querySelectorAll('[data-url-save]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const draftId = btn.dataset.urlSave;
+        const input = document.getElementById(`dist-url-${draftId}`);
+        if (!input) return;
+        await CC.api.drafts.update(draftId, { publicUrl: input.value.trim() });
+        CC.showStatus('Public URL saved');
+      });
+    });
+
+    // Enter to save URL
+    document.querySelectorAll('[data-url-input]').forEach((input) => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.querySelector(`[data-url-save="${input.dataset.urlInput}"]`)?.click();
+        }
+      });
+    });
 
     // Generate missing summary
     document.querySelectorAll('[data-gen-summary]').forEach((btn) => {

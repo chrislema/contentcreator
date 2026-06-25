@@ -861,23 +861,27 @@ ipcMain.handle('drafts:platformChat', async (_e, draftId, platform, userMessage,
   // Append user message
   record.conversation = [...record.conversation, { role: 'user', content: userMessage }];
 
+  const publicUrl = draft.publicUrl || '';
+
   const sysPrompt = `You are a content promotion expert writing a ${platform} promotional post for an article.
 
 Article content:
 ${articleContent}
+
+${publicUrl ? `Public URL of the published article (use this in the post or first comment):\n${publicUrl}\n` : ''}
 
 Platform rules for ${platform}:
 ${JSON.stringify(platformRules, null, 2)}
 
 Voice: ${voice?.name || 'default'} - ${voice?.identity || ''}
 
-Write a single, ready-to-post ${platform} promotional message. No preamble, no explanation. Just the post.`;
+IMPORTANT: Write the actual ${platform} post content NOW. Do not ask questions, do not use placeholders, do not try to look up anything. Just write the complete, ready-to-post message. ${publicUrl ? 'The URL is provided above.' : 'No URL is available yet - write the post without it and the user will add the link manually.'}`;
 
   status(`Drafting ${platform} post...`);
   const response = await chatCompletion(model, [
     { role: 'system', content: sysPrompt },
     ...record.conversation
-  ], 2048, { modelId: model.id });
+  ], 2048, { modelId: model.id, noTools: true });
 
   record.conversation = [...record.conversation, { role: 'assistant', content: response }];
   record.modelId = modelId;
@@ -887,6 +891,55 @@ Write a single, ready-to-post ${platform} promotional message. No preamble, no e
   status(`${platform} post drafted`);
   return draftsStore.get(draftId);
 });
+
+// Parse a model's social post response into clean body + optional first comment
+// Strips headers, meta-commentary, separators, and follow-up questions
+function parseSocialPost(rawContent) {
+  let text = rawContent;
+
+  // Split on common section delimiters
+  // Models use patterns like "POST (body):", "FIRST COMMENT:", "BODY:", etc.
+  const bodyMatch = text.match(/(?:\*\*)?(?:POST|BODY|MAIN\s*POST|THE\s*POST)(?:\s*\(body\))?\s*:?\s*(?:\*\*)?\s*\n([\s\S]*?)(?=\n\s*(?:---|\*\*\s*(?:FIRST\s*COMMENT|COMMENT)|\n---|$))/i);
+  const commentMatch = text.match(/(?:\*\*)?(?:FIRST\s*COMMENT|COMMENT)(?:\s*\(body\))?\s*:?\s*(?:\*\*)?\s*\n([\s\S]*?)(?=\n\s*(?:---|$))/i);
+
+  let body = null;
+  let firstComment = null;
+
+  if (bodyMatch) {
+    body = bodyMatch[1].trim();
+  } else {
+    // No explicit "POST:" header - take everything before "FIRST COMMENT" or first ---
+    const beforeComment = text.split(/\n\s*(?:\*\*\s*)?(?:FIRST\s*COMMENT|COMMENT)\s*:?/i)[0];
+    const beforeSeparator = beforeComment.split(/\n\s*---\s*\n/i)[0];
+    body = beforeSeparator.trim();
+    // Strip leading meta lines like "Here's the Facebook post..."
+    const lines = body.split('\n');
+    // Find the first line that looks like actual post content (not meta-commentary)
+    const metaPatterns = /^(here'?s|sure|absolutely|i'?ve|i\s+wrote|let me|this is|want me|the (?:post|hook)|note:)/i;
+    let startIdx = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line && !metaPatterns.test(line) && line.length > 10) {
+        startIdx = i;
+        break;
+      }
+    }
+    body = lines.slice(startIdx).join('\n').trim();
+  }
+
+  if (commentMatch) {
+    firstComment = commentMatch[1].trim();
+  }
+
+  // Clean up: remove trailing separators and follow-up questions
+  body = body.replace(/\n\s*---+\s*$/g, '').trim();
+  firstComment = firstComment ? firstComment.replace(/\n\s*---+\s*$/g, '').trim() : null;
+
+  // Strip trailing "Want me to..." or "Curious..." questions from body
+  body = body.replace(/\n+(?:Want me to|Curious|Should I|Let me know|Hope this)[^\n]*\.?\s*$/i, '').trim();
+
+  return { body, firstComment };
+}
 
 // Publish a platform post via ContentStudio MCP
 ipcMain.handle('drafts:publishPlatform', async (_e, draftId, platform, content) => {
@@ -900,11 +953,31 @@ ipcMain.handle('drafts:publishPlatform', async (_e, draftId, platform, content) 
   // Map our platform IDs to ContentStudio platform names
   const csPlatform = { facebook: 'facebook', twitter: 'twitter', linkedin: 'linkedin' }[platform] || platform;
 
-  // Step 1: Find the social account for this platform
+  // Parse the model output into clean body + first comment
+  const parsed = parseSocialPost(content);
+  if (!parsed.body) throw new Error('Could not extract post content from the model response.');
+
+  // Step 1: Get workspace ID
+  status(`Finding workspace...`);
+  let workspaceId = null;
+  try {
+    const wsResult = await callTool(csMcp, 'fetch_workspaces', {});
+    let wsData;
+    try { wsData = JSON.parse(wsResult); } catch { wsData = wsResult; }
+    const workspaces = wsData?.data || wsData || [];
+    if (Array.isArray(workspaces) && workspaces.length > 0) {
+      workspaceId = workspaces[0]._id || workspaces[0].id;
+    }
+  } catch (e) {
+    throw new Error(`Could not fetch ContentStudio workspace: ${e.message}`);
+  }
+  if (!workspaceId) throw new Error('No ContentStudio workspace found.');
+
+  // Step 2: Find the social account for this platform
   status(`Finding ${csPlatform} account...`);
   let accountId = null;
   try {
-    const accountsResult = await callTool(csMcp, 'fetch_social_accounts', { platform: csPlatform });
+    const accountsResult = await callTool(csMcp, 'fetch_social_accounts', { workspace_id: workspaceId, platform: csPlatform });
     let accountsData;
     try {
       accountsData = JSON.parse(accountsResult);
@@ -921,24 +994,32 @@ ipcMain.handle('drafts:publishPlatform', async (_e, draftId, platform, content) 
 
   if (!accountId) throw new Error(`No ${csPlatform} account found in ContentStudio. Connect one first.`);
 
-  // Step 2: Create the post
+  // Step 3: Create the post with parsed body
+  // Note: ContentStudio MCP uses text_content (not content), accounts as JSON string,
+  // publish_type at top level, and scheduled_at is required even for drafts
   status(`Publishing to ${csPlatform}...`);
-  const createResult = await callTool(csMcp, 'create_post', {
-    content: content,
-    accounts: [accountId],
-    scheduling: { publish_type: 'draft' }
-  });
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const postData = {
+    workspace_id: workspaceId,
+    text_content: parsed.body,
+    accounts: JSON.stringify([accountId]),
+    publish_type: 'draft',
+    scheduled_at: now
+  };
+
+  const createResult = await callTool(csMcp, 'create_post', postData);
 
   // Mark as published on the draft
   const platformPosts = draft.platformPosts || {};
   platformPosts[platform] = {
     ...(platformPosts[platform] || {}),
-    content,
+    content: parsed.body,
+    firstComment: parsed.firstComment,
     publishedAt: new Date().toISOString(),
     csResult: createResult.slice(0, 500)
   };
   const updated = draftsStore.add({ ...draft, platformPosts });
-  status(`Published to ${platform} via ContentStudio`);
+  status(`Published to ${platform} via ContentStudio${parsed.firstComment ? ' (with first comment)' : ''}`);
   return updated;
 });
 
@@ -989,6 +1070,9 @@ You have direct access to the Payload CMS MCP tools. Use them freely during this
 - Discuss what you find with the user
 - When the user confirms, call create_posts to publish the article
 
+After creating the post, ALWAYS report the public URL on its own line in this exact format:
+PUBLIC_URL: https://chrislema.com/<slug>
+
 Do NOT produce a JSON plan for someone else to execute. You execute the tools yourself during this chat. Talk through what you're doing in plain language as you go, so the user can follow along and adjust.`;
 
   status('Chatting with model about site publish...');
@@ -1010,13 +1094,28 @@ ipcMain.handle('drafts:siteExecute', async (_e, draftId) => {
   const draft = draftsStore.get(draftId);
   if (!draft) throw new Error('Draft not found');
 
-  const updated = draftsStore.add({
+  // Extract the public URL from the conversation
+  let publicUrl = draft.publicUrl || null;
+  const conv = draft.siteConversation || [];
+  for (let i = conv.length - 1; i >= 0; i--) {
+    const msg = conv[i];
+    if (msg.role !== 'assistant') continue;
+    const match = msg.content.match(/PUBLIC_URL:\s*(https?:\/\/\S+)/i);
+    if (match) {
+      publicUrl = match[1].trim();
+      break;
+    }
+  }
+
+  const patch = {
     ...draft,
     sitePublishedAt: new Date().toISOString()
-  });
+  };
+  if (publicUrl) patch.publicUrl = publicUrl;
 
-  status('Marked published to site');
-  return { success: true };
+  const updated = draftsStore.add(patch);
+  status(publicUrl ? `Marked published to site. URL: ${publicUrl}` : 'Marked published to site');
+  return { success: true, publicUrl };
 });
 
 // Chat about sending newsletter via Kit MCP
@@ -1052,7 +1151,7 @@ ipcMain.handle('drafts:newsletterChat', async (_e, draftId, message, modelId) =>
 
 Article title: ${title}
 Summary: ${summary}
-
+${draft.publicUrl ? `\nPublic URL: ${draft.publicUrl}\n` : ''}
 Article (markdown):
 ${articleContent.slice(0, 5000)}
 
@@ -1060,7 +1159,7 @@ ${toolsContext}
 
 You have direct access to the Kit MCP tools. Use them freely during this conversation:
 - List broadcasts, tags, subscribers to understand the account
-- Create a broadcast with subject, preview text, and email content (you can link to the article)
+- Create a broadcast with subject, preview text, and email content${draft.publicUrl ? ' (link to the article at ' + draft.publicUrl + ')' : ''}
 - Discuss the plan with the user before sending
 
 Talk through what you're doing in plain language as you go, so the user can follow along and adjust.`;
