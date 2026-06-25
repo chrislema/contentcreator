@@ -215,7 +215,7 @@ CC.views.topics = {
         const seg = segments.find((s) => s.name === topic.target) || segments[0];
 
         // Get active frameworks
-        const activeFws = (CC.state.frameworks || []).filter((f) => f.active).slice(0, 5);
+        const activeFws = (CC.state.frameworks || []).filter((f) => f.active);
         const voice = CC.state.voiceProfiles.find((v) => v.isDefault) || CC.state.voiceProfiles[0];
 
         const draft = await CC.api.drafts.add({

@@ -706,12 +706,15 @@ async function generateTopicsInBackground(model, settings) {
     const audiences = audiencesStore.list();
     const created = [];
     for (const t of topics) {
+      // Clean target: strip parenthetical force descriptions the model sometimes appends
+      const cleanTarget = (t.target || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+      const matchedAudience = audiences.find((a) => a.name === cleanTarget || a.name.startsWith(cleanTarget));
       const record = {
         id: makeId(),
         title: t.title,
         angle: t.angle,
-        target: t.target,
-        targetAudience: audiences.find((a) => a.name === t.target)?.id || '',
+        target: matchedAudience ? matchedAudience.name : cleanTarget,
+        targetAudience: matchedAudience?.id || '',
         cmsTags: t.cmsTags || [],
         priority: t.priority || 3,
         scores: t.scores || null,
@@ -786,11 +789,24 @@ ipcMain.handle('drafts:generate', async (_e, draftId, userMessage) => {
   const voice = voiceProfilesStore.list().find((v) => v.id === draft.voiceProfileId) || voiceProfilesStore.list().find((v) => v.isDefault);
   const antiAi = antiAiStore.list();
 
-  const systemPrompt = buildDraftSystemPrompt({ voiceProfile: voice, segment, frameworks, antiAiRules: antiAi });
-
   // Build messages
   const topic = topicsStore.get(draft.topicId);
   const topicContext = topic ? `Topic: ${topic.title}\nAngle: ${topic.angle}\nTarget: ${topic.target}` : `Title: ${draft.title}`;
+
+  // Generate context files for CLI models, fall back to inline system prompt for API models
+  let contextOptions = {};
+  let systemPrompt;
+
+  if (model.connectionType === 'oauth-cli') {
+    // CLI model: use context files + --add-dir
+    const { generateContextFiles } = require('./lib/contextFiles');
+    const ctx = generateContextFiles(draft.id, { voiceProfile: voice, segment, frameworks, antiAiRules: antiAi });
+    contextOptions = { contextDir: ctx.dir, instruction: ctx.instruction };
+    systemPrompt = ctx.instruction;
+  } else {
+    // API model: inline system prompt (files don't apply)
+    systemPrompt = buildDraftSystemPrompt({ voiceProfile: voice, segment, frameworks, antiAiRules: antiAi });
+  }
 
   const messages = [{ role: 'system', content: systemPrompt }];
 
@@ -808,7 +824,7 @@ ipcMain.handle('drafts:generate', async (_e, draftId, userMessage) => {
   messages.push({ role: 'user', content: userContent });
 
   status('Drafting...');
-  const response = await chatCompletion(model, messages);
+  const response = await chatCompletion(model, messages, undefined, contextOptions);
   status('Draft updated');
 
   // Save conversation
