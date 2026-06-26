@@ -142,5 +142,11 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   // App state
-  getState: () => ipcRenderer.invoke('app:getState')
+  getState: () => ipcRenderer.invoke('app:getState'),
+
+  // Utilities
+  utilities: {
+    exportData: (sections) => ipcRenderer.invoke('utilities:export', sections),
+    importData: () => ipcRenderer.invoke('utilities:import')
+  }
 });

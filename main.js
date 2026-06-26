@@ -1360,6 +1360,85 @@ ipcMain.handle('app:getState', () => ({
   hasExisting: existingContentStore.list().length > 0
 }));
 
+// ── IPC: Utilities (Export / Import) ─────────────────────────────
+
+const EXPORTABLE = {
+  settings: { label: 'Models, MCPs & Profile', type: 'document', store: () => settingsStore },
+  frameworks: { label: 'Frameworks', type: 'collection', store: () => frameworksStore },
+  antiAi: { label: 'Anti-AI Rules', type: 'collection', store: () => antiAiStore },
+  voiceProfiles: { label: 'Voice Profiles', type: 'collection', store: () => voiceProfilesStore },
+  platformProfiles: { label: 'Platform Profiles', type: 'collection', store: () => platformProfilesStore },
+  audiences: { label: 'Audiences', type: 'collection', store: () => audiencesStore },
+  topics: { label: 'Topics', type: 'collection', store: () => topicsStore },
+  drafts: { label: 'Drafts', type: 'collection', store: () => draftsStore },
+  distributions: { label: 'Distributions', type: 'collection', store: () => distributionsStore },
+  existingContent: { label: 'Existing Content', type: 'collection', store: () => existingContentStore }
+};
+
+ipcMain.handle('utilities:export', async (_e, sections) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: 'Export ContentCreator Data',
+    defaultPath: `contentcreator-export-${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  });
+  if (canceled || !filePath) return { canceled: true };
+
+  const data = {
+    _meta: {
+      app: 'ContentCreator',
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      sections: Object.keys(sections).filter((k) => sections[k])
+    }
+  };
+
+  for (const [key, selected] of Object.entries(sections)) {
+    if (!selected) continue;
+    const spec = EXPORTABLE[key];
+    if (!spec) continue;
+    if (spec.type === 'document') {
+      data[key] = spec.store().get();
+    } else {
+      data[key] = spec.store().list();
+    }
+  }
+
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  status(`Exported to ${filePath}`);
+  return { success: true, path: filePath };
+});
+
+ipcMain.handle('utilities:import', async (_e) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Import ContentCreator Data',
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+    properties: ['openFile']
+  });
+  if (canceled || !filePaths || filePaths.length === 0) return { canceled: true };
+
+  const raw = fs.readFileSync(filePaths[0], 'utf8');
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid JSON file');
+  }
+
+  const imported = [];
+  for (const [key, spec] of Object.entries(EXPORTABLE)) {
+    if (!data[key]) continue;
+    if (spec.type === 'document') {
+      spec.store().set(data[key]);
+    } else {
+      spec.store().setAll(data[key]);
+    }
+    imported.push(spec.label);
+  }
+
+  status(`Imported: ${imported.join(', ')}`);
+  return { success: true, imported };
+});
+
 app.whenReady().then(() => {
   createWindow();
 

@@ -1212,7 +1212,105 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-color: var(--accent);
 }
 
-/* ── MCP Cards ────────────────────────────────── */
+/* ── Utilities (Export / Import) ──────────────── */
+.util-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 640px;
+}
+
+.util-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.util-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.util-desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 16px;
+}
+
+.util-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.util-check,
+.util-check-all {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.util-check:hover,
+.util-check-all:hover {
+  background: var(--bg-soft);
+}
+
+.util-check input[type="checkbox"],
+.util-check-all input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.util-check-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+}
+
+.util-check-desc {
+  font-size: 11.5px;
+  color: var(--muted);
+  display: block;
+  margin-top: 2px;
+}
+
+.util-check-all {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.util-check-all .util-check-label {
+  color: var(--accent-2);
+}
+
+.util-warning {
+  border-style: dashed;
+}
+
+.util-notes {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.util-notes li {
+  margin-bottom: 4px;
+}
+
+.util-import-result {
+  margin-top: 8px;
+}
 .mcp-section {
   display: flex;
   flex-direction: column;

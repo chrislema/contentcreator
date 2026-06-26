@@ -11,6 +11,7 @@ CC.views.settings = {
       <button class="sub-tab ${this.subView === 'mcps' ? 'active' : ''}" data-sub="mcps">MCPs</button>
       <button class="sub-tab ${this.subView === 'existing' ? 'active' : ''}" data-sub="existing">Existing Content</button>
       <button class="sub-tab ${this.subView === 'antiAi' ? 'active' : ''}" data-sub="antiAi">Anti-AI</button>
+      <button class="sub-tab ${this.subView === 'utilities' ? 'active' : ''}" data-sub="utilities">Utilities</button>
     </div>
     <div class="section-body" id="settings-content">
       ${this.renderSub()}
@@ -25,6 +26,7 @@ CC.views.settings = {
       case 'mcps': return this.renderMcps();
       case 'existing': return this.renderExisting();
       case 'antiAi': return this.renderAntiAi();
+      case 'utilities': return this.renderUtilities();
       default: return '';
     }
   },
@@ -43,6 +45,7 @@ CC.views.settings = {
     if (this.subView === 'mcps') this.initMcps();
     if (this.subView === 'existing') this.initExisting();
     if (this.subView === 'antiAi') this.initAntiAi();
+    if (this.subView === 'utilities') this.initUtilities();
   },
 
   // ── Profile ──────────────────────────────
@@ -1189,6 +1192,136 @@ CC.views.settings = {
       await CC.api.antiAi.add({ rule, category, description: 'Custom rule' });
       await CC.refresh('antiAi');
       CC.navigate('settings');
+    });
+  },
+
+  // ── Utilities (Export / Import) ──────────────────────
+  renderUtilities() {
+    const sections = [
+      { id: 'settings', label: 'Models, MCPs & Profile', desc: 'API keys, OAuth tokens, model configs, MCP connections' },
+      { id: 'frameworks', label: 'Frameworks', desc: 'Content frameworks and active toggles' },
+      { id: 'antiAi', label: 'Anti-AI Rules', desc: 'Banned words, phrases, and structural patterns' },
+      { id: 'voiceProfiles', label: 'Voice Profiles', desc: 'Voice identity, tone, and style settings' },
+      { id: 'platformProfiles', label: 'Platform Profiles', desc: 'Platform-specific posting rules' },
+      { id: 'audiences', label: 'Audiences', desc: 'Micro-segments, goal pyramids, pain pyramids' },
+      { id: 'topics', label: 'Topics', desc: 'Ranked content ideas and intelligence data' },
+      { id: 'drafts', label: 'Drafts', desc: 'Article drafts, conversations, summaries' },
+      { id: 'distributions', label: 'Distributions', desc: 'Generated platform posts' },
+      { id: 'existingContent', label: 'Existing Content', desc: 'Imported articles with analysis summaries' }
+    ];
+
+    return `<div class="util-section">
+      <div class="util-card">
+        <div class="util-card-title">Export Data</div>
+        <p class="util-desc">Select what to export. You'll get a single JSON file you can import on another machine to clone this setup.</p>
+        <div class="util-checkboxes">
+          <label class="util-check-all">
+            <input type="checkbox" id="util-export-all" />
+            <span class="util-check-label"><strong>Select Everything</strong></span>
+          </label>
+          ${sections.map((s) => `
+            <label class="util-check">
+              <input type="checkbox" class="util-export-item" data-export="${s.id}" />
+              <div>
+                <span class="util-check-label">${CC.escapeHtml(s.label)}</span>
+                <span class="util-check-desc">${CC.escapeHtml(s.desc)}</span>
+              </div>
+            </label>
+          `).join('')}
+        </div>
+        <button class="btn-primary btn-sm" id="util-export-btn">Export Selected</button>
+      </div>
+
+      <div class="util-card">
+        <div class="util-card-title">Import Data</div>
+        <p class="util-desc">Select a previously exported JSON file. This will overwrite existing data for every section found in the file.</p>
+        <button class="btn-primary btn-sm" id="util-import-btn">Choose File &amp; Import</button>
+        <div id="util-import-result" class="util-import-result"></div>
+      </div>
+
+      <div class="util-card util-warning">
+        <div class="util-card-title">What's NOT exported</div>
+        <ul class="util-notes">
+          <li>Installed CLI tools (ContentStudio, Claude Code) - install these manually on the new machine</li>
+          <li>MCP <em>connection state</em> - you'll need to click Connect again after import (OAuth tokens may be expired)</li>
+          <li>The app itself - install from the <a href="https://github.com/chrislema/contentcreator" target="_blank">GitHub repo</a> using the README instructions</li>
+        </ul>
+      </div>
+    </div>`;
+  },
+
+  initUtilities() {
+    const self = this;
+
+    // Select all toggle
+    document.getElementById('util-export-all')?.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      document.querySelectorAll('.util-export-item').forEach((cb) => { cb.checked = checked; });
+    });
+
+    // Individual checkbox: uncheck "all" if any unchecked
+    document.querySelectorAll('.util-export-item').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const all = document.getElementById('util-export-all');
+        const items = document.querySelectorAll('.util-export-item');
+        const allChecked = Array.from(items).every((i) => i.checked);
+        all.checked = allChecked;
+      });
+    });
+
+    // Export
+    document.getElementById('util-export-btn')?.addEventListener('click', async () => {
+      const sections = {};
+      let count = 0;
+      document.querySelectorAll('.util-export-item').forEach((cb) => {
+        sections[cb.dataset.export] = cb.checked;
+        if (cb.checked) count++;
+      });
+      if (count === 0) { CC.showStatus('Select at least one section to export'); return; }
+
+      const btn = document.getElementById('util-export-btn');
+      btn.disabled = true;
+      btn.textContent = 'Exporting...';
+      try {
+        const result = await CC.api.utilities.exportData(sections);
+        if (result.canceled) {
+          btn.disabled = false;
+          btn.textContent = 'Export Selected';
+        } else {
+          CC.showStatus(`Exported ${count} section(s) to file`);
+        }
+      } catch (e) {
+        CC.showStatus('Export failed: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Export Selected';
+      }
+    });
+
+    // Import
+    document.getElementById('util-import-btn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('util-import-btn');
+      btn.disabled = true;
+      btn.textContent = 'Importing...';
+      const resultDiv = document.getElementById('util-import-result');
+      resultDiv.innerHTML = '';
+      try {
+        const result = await CC.api.utilities.importData();
+        if (result.canceled) {
+          btn.disabled = false;
+          btn.textContent = 'Choose File & Import';
+          return;
+        }
+        resultDiv.innerHTML = `<div class="badge ok" style="margin-top:10px">Imported: ${result.imported.map(CC.escapeHtml).join(', ')}</div>`;
+        CC.showStatus('Import complete. Refreshing...');
+        // Reload all state at once
+        await CC.refresh();
+        CC.navigate('settings');
+      } catch (e) {
+        resultDiv.innerHTML = `<div class="badge" style="color:var(--danger);margin-top:10px">Failed: ${CC.escapeHtml(e.message)}</div>`;
+        CC.showStatus('Import failed: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Choose File & Import';
+      }
     });
   }
 };
