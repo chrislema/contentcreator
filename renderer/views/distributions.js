@@ -58,9 +58,9 @@ CC.views.distributions = {
     const panelHtml = openPanel ? this.renderPanel(d, openPanel) : '';
 
     return `<div class="dist-card-wrapper" data-dist-card="${d.id}">
-      <div class="ui-card card dist-card">
+      <div class="ui-card dist-card">
         <div class="dist-card-left">
-          <div class="ui-card-title card-title">${CC.escapeHtml(displayTitle)}</div>
+          <div class="ui-card-title">${CC.escapeHtml(displayTitle)}</div>
           ${d.summary
             ? `<div class="dist-summary">${CC.escapeHtml(d.summary)}</div>`
             : `<div class="dist-summary dist-summary-missing">
@@ -68,7 +68,7 @@ CC.views.distributions = {
                 ${CC.ui.button('Generate Summary', { variant: 'ghost', data: { 'gen-summary': d.id } })}
               </div>`
           }
-          <div class="ui-tags topic-tags-row">
+          <div class="ui-tags">
             ${segmentName ? CC.ui.badge(segmentName, { tone: 'accent' }) : ''}
           </div>
           <details class="dist-article-details">
@@ -187,9 +187,9 @@ CC.views.distributions = {
 
   renderDist(dist) {
     const posts = dist.platformPosts || [];
-    return `<div class="ui-card card dist-generated-card">
+    return `<div class="ui-card dist-generated-card">
       <div class="ui-card-header dist-generated-header">
-        <div class="ui-card-title card-title">${CC.escapeHtml(dist.title || 'Untitled')}</div>
+        <div class="ui-card-title">${CC.escapeHtml(dist.title || 'Untitled')}</div>
         ${CC.ui.badge(CC.fmtDate(dist.createdAt), { tone: 'dim' })}
       </div>
       ${posts.map((p) => `

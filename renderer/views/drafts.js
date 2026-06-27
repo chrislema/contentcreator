@@ -85,7 +85,7 @@ CC.views.drafts = {
     const voice = CC.state.voiceProfiles?.find((v) => v.isDefault) || CC.state.voiceProfiles?.[0];
     const activeFws = (CC.state.frameworks || []).filter((f) => f.active);
 
-    return `<div id="draft-new-form" class="ui-form-panel mcp-form ${this.showNewForm ? '' : 'hidden'}">
+    return `<div id="draft-new-form" class="ui-form-panel ${this.showNewForm ? '' : 'hidden'}">
       <div class="form-group">
         <label>Subject</label>
         <input id="nd-title" type="text" placeholder="What is this about?" />
