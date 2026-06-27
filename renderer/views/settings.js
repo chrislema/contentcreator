@@ -1074,48 +1074,61 @@ CC.views.settings = {
     const countries = an.topCountries || [];
     const sources = an.topSources || [];
     const queries = an.topQueries || [];
+    const warnings = an.warnings || [];
+    const errors = an.errors || [];
+    const hasLast30d = !!an.last30d;
+    const statusClass = an.status === 'complete' ? 'ok' : an.status === 'failed' ? 'warn' : 'accent';
+    const statusLabel = an.status ? an.status[0].toUpperCase() + an.status.slice(1) : '';
+    const emptyRow = (text) => `<div class="analytics-empty">${CC.escapeHtml(text)}</div>`;
 
     return `<div class="analytics-panel">
       <div class="analytics-panel-header">
         <span class="analytics-panel-title">Analytics</span>
-        <button class="btn-ghost btn-sm" data-existing-details-close>Close</button>
+        <div class="analytics-panel-meta">
+          ${statusLabel ? `<span class="badge ${statusClass}" style="font-size:10.5px">${statusLabel}</span>` : ''}
+          <button class="btn-ghost btn-sm" data-existing-details-close>Close</button>
+        </div>
       </div>
       <div class="analytics-grid">
         <div class="analytics-stat">
           <span class="analytics-stat-label">Page Views (30d)</span>
-          <span class="analytics-stat-value">${(t30.pageViews || 0).toLocaleString()}</span>
+          <span class="analytics-stat-value">${hasLast30d ? (t30.pageViews || 0).toLocaleString() : '-'}</span>
         </div>
         <div class="analytics-stat">
           <span class="analytics-stat-label">Active Users (30d)</span>
-          <span class="analytics-stat-value">${(t30.activeUsers || 0).toLocaleString()}</span>
+          <span class="analytics-stat-value">${hasLast30d ? (t30.activeUsers || 0).toLocaleString() : '-'}</span>
         </div>
         <div class="analytics-stat">
           <span class="analytics-stat-label">Avg Session</span>
-          <span class="analytics-stat-value">${t30.avgSessionDuration ? Math.round(t30.avgSessionDuration) + 's' : '-'}</span>
+          <span class="analytics-stat-value">${hasLast30d ? Math.round(t30.avgSessionDuration || 0) + 's' : '-'}</span>
         </div>
         <div class="analytics-stat">
           <span class="analytics-stat-label">Engagement</span>
-          <span class="analytics-stat-value">${t30.engagementRate ? Math.round(t30.engagementRate * 100) + '%' : '-'}</span>
+          <span class="analytics-stat-value">${hasLast30d ? Math.round((t30.engagementRate || 0) * 100) + '%' : '-'}</span>
         </div>
       </div>
-      ${countries.length ? `<div class="analytics-section">
+      ${errors.length || warnings.length ? `<div class="analytics-alerts">
+        ${errors.slice(0, 3).map((e) => `<div class="analytics-alert error">${CC.escapeHtml(e.label || 'Error')}: ${CC.escapeHtml(e.message || '')}</div>`).join('')}
+        ${warnings.slice(0, 3).map((w) => `<div class="analytics-alert">${CC.escapeHtml(w.label || 'Note')}: ${CC.escapeHtml(w.message || '')}</div>`).join('')}
+      </div>` : ''}
+      <div class="analytics-section">
         <div class="analytics-section-title">Top Countries</div>
-        ${countries.map((c) => `<div class="analytics-row"><span>${CC.escapeHtml(c.country || 'Unknown')}</span><span>${(c.users || 0).toLocaleString()}</span></div>`).join('')}
-      </div>` : ''}
-      ${sources.length ? `<div class="analytics-section">
+        ${countries.length ? countries.map((c) => `<div class="analytics-row"><span>${CC.escapeHtml(c.country || 'Unknown')}</span><span>${(c.users || 0).toLocaleString()}</span></div>`).join('') : emptyRow('No country data returned for this page.')}
+      </div>
+      <div class="analytics-section">
         <div class="analytics-section-title">Top Sources</div>
-        ${sources.map((s) => `<div class="analytics-row"><span>${CC.escapeHtml(s.source || 'Unknown')}</span><span>${(s.users || 0).toLocaleString()}</span></div>`).join('')}
-      </div>` : ''}
-      ${queries.length ? `<div class="analytics-section">
+        ${sources.length ? sources.map((s) => `<div class="analytics-row"><span>${CC.escapeHtml(s.source || 'Unknown')}</span><span>${(s.users || 0).toLocaleString()}</span></div>`).join('') : emptyRow('No source data returned for this page.')}
+      </div>
+      <div class="analytics-section">
         <div class="analytics-section-title">Top Search Queries</div>
-        ${queries.map((q) => `<div class="analytics-query-row">
+        ${queries.length ? queries.map((q) => `<div class="analytics-query-row">
           <span class="analytics-query-text">${CC.escapeHtml(q.query)}</span>
           <div class="analytics-query-stats">
             <span class="analytics-query-stat">${q.clicks} clicks</span>
             <span class="analytics-query-stat">#${q.position ? q.position.toFixed(1) : '-'}</span>
           </div>
-        </div>`).join('')}
-      </div>` : ''}
+        </div>`).join('') : emptyRow('No Search Console queries returned for this page.')}
+      </div>
       <div class="analytics-enriched-at">Enriched: ${an.enrichedAt ? new Date(an.enrichedAt).toLocaleDateString() : '-'}</div>
     </div>`;
   },

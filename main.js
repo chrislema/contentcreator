@@ -30,6 +30,118 @@ function logError(source, error) {
   } catch {}
 }
 
+const ANALYTICS_ENRICHMENT_VERSION = 2;
+
+function logAnalyticsEvent(event) {
+  try {
+    const logPath = path.join(getDataDir(), '..', 'analytics-enrichment.log');
+    const entry = {
+      ts: new Date().toISOString(),
+      ...event
+    };
+    const title = entry.title ? ` "${entry.title}"` : '';
+    const result = entry.ok ? `ok rows=${entry.rowsReturned ?? 0}/${entry.rowCount ?? 0}` : `error=${entry.error || 'unknown'}`;
+    console.log(`[analytics-enrichment] ${entry.label || 'event'}${title}: ${result}`);
+    fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
+  } catch {}
+}
+
+function analyticsRows(data) {
+  return Array.isArray(data?.data?.rows) ? data.data.rows : [];
+}
+
+function analyticsRowCount(data) {
+  return data?.data?.rowCount ?? analyticsRows(data).length;
+}
+
+function toInteger(value) {
+  const parsed = parseInt(value ?? 0, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toNumber(value) {
+  const parsed = parseFloat(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function dimensionValue(row, index, key) {
+  if (!row) return '';
+  if (row[key] !== undefined && row[key] !== null) return String(row[key]);
+  if (row.dimensionValues?.[index]?.value !== undefined) return String(row.dimensionValues[index].value);
+  if (Array.isArray(row.dimensions) && row.dimensions[index] !== undefined) return String(row.dimensions[index]);
+  if (row.dimensions && typeof row.dimensions === 'object' && row.dimensions[key] !== undefined) return String(row.dimensions[key]);
+  if (Array.isArray(row.keys) && row.keys[index] !== undefined) return String(row.keys[index]);
+  return '';
+}
+
+function metricValue(row, index, key) {
+  if (!row) return 0;
+  if (row[key] !== undefined && row[key] !== null) return row[key];
+  if (row.metricValues?.[index]?.value !== undefined) return row.metricValues[index].value;
+  if (Array.isArray(row.metrics) && row.metrics[index]?.value !== undefined) return row.metrics[index].value;
+  if (row.metrics && typeof row.metrics === 'object' && row.metrics[key] !== undefined) return row.metrics[key];
+  return 0;
+}
+
+function gaPageFilter(pagePath) {
+  return {
+    filter: {
+      fieldName: 'pagePath',
+      stringFilter: {
+        matchType: 'EXACT',
+        value: pagePath
+      }
+    }
+  };
+}
+
+function needsAnalyticsRefresh(article) {
+  const analytics = article.analytics;
+  if (!analytics) return true;
+  if (analytics.enrichmentVersion !== ANALYTICS_ENRICHMENT_VERSION) return true;
+  return analytics.status === 'failed' || (Array.isArray(analytics.errors) && analytics.errors.length > 0);
+}
+
+async function callAnalyticsTool(article, analytics, googleMcp, label, toolName, args) {
+  const logBase = {
+    articleId: article.id,
+    title: article.title,
+    pagePath: article.pagePath,
+    publicUrl: article.publicUrl,
+    label,
+    toolName,
+    args
+  };
+
+  try {
+    const raw = await callTool(googleMcp, toolName, args);
+    const data = JSON.parse(raw);
+    const rows = analyticsRows(data);
+
+    analytics.callStatus[label] = {
+      ok: true,
+      rowCount: analyticsRowCount(data),
+      rowsReturned: rows.length
+    };
+
+    logAnalyticsEvent({
+      ...logBase,
+      ok: true,
+      rowCount: analyticsRowCount(data),
+      rowsReturned: rows.length,
+      firstRow: rows[0] || null
+    });
+
+    return data;
+  } catch (e) {
+    const message = e.message || String(e);
+    analytics.errors.push({ label, message });
+    analytics.callStatus[label] = { ok: false, error: message };
+    logAnalyticsEvent({ ...logBase, ok: false, error: message });
+    return null;
+  }
+}
+
 // Parse a markdown article with optional YAML front matter
 function parseArticle(text, filename) {
   let title = filename;
@@ -684,7 +796,7 @@ ipcMain.handle('existing:enrichAnalytics', async () => {
 
   const articles = existingContentStore.list();
   const withUrls = articles.filter((a) => a.pagePath && (a.tags || []).includes('ai'));
-  const needingEnrichment = withUrls.filter((a) => !a.analytics);
+  const needingEnrichment = withUrls.filter(needsAnalyticsRefresh);
 
   if (needingEnrichment.length === 0) {
     return { enriched: 0, skipped: withUrls.length, total: withUrls.length };
@@ -707,85 +819,112 @@ async function enrichAnalyticsInBackground(articles, googleMcp) {
       status(`Enriching ${done + 1}/${total}: ${article.title.slice(0, 50)}...`);
 
       const pagePath = article.pagePath;
-      const analytics = { enrichedAt: new Date().toISOString() };
+      const publicUrl = article.publicUrl || (article.slug ? `https://chrislema.com/${article.slug}` : '');
+      const analytics = {
+        enrichmentVersion: ANALYTICS_ENRICHMENT_VERSION,
+        enrichedAt: new Date().toISOString(),
+        provider: 'Google MCP',
+        dateRanges: {
+          traffic: '30daysAgo..yesterday',
+          dimensions: '90daysAgo..yesterday',
+          search: '28daysAgo..yesterday'
+        },
+        callStatus: {},
+        warnings: [],
+        errors: []
+      };
 
       // GA4: last 30 days traffic + engagement
-      try {
-        const ga30 = await callTool(googleMcp, 'ga4_run_report', {
-          dimensions: ['pagePath'],
-          metrics: ['screenPageViews', 'activeUsers', 'averageSessionDuration', 'engagementRate'],
-          startDate: '30daysAgo',
-          endDate: 'yesterday',
-          dimensionFilter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT', value: pagePath } },
-          limit: 1
-        });
-        const gaData = JSON.parse(ga30);
-        const row = gaData?.data?.rows?.[0];
-        if (row) {
-          const metrics = row.metricValues || row.metrics;
-          analytics.last30d = {
-            pageViews: parseInt(metrics[0]?.value || metrics?.screenPageViews || '0'),
-            activeUsers: parseInt(metrics[1]?.value || metrics?.activeUsers || '0'),
-            avgSessionDuration: parseFloat(metrics[2]?.value || '0'),
-            engagementRate: parseFloat(metrics[3]?.value || '0')
-          };
-        }
-      } catch (e) { /* skip GA4 errors per article */ }
+      const ga30 = await callAnalyticsTool(article, analytics, googleMcp, 'ga4_30d', 'ga4_run_report', {
+        dimensions: ['pagePath'],
+        metrics: ['screenPageViews', 'activeUsers', 'averageSessionDuration', 'engagementRate'],
+        start_date: '30daysAgo',
+        end_date: 'yesterday',
+        dimension_filter: gaPageFilter(pagePath),
+        limit: 1
+      });
+      const ga30Row = analyticsRows(ga30)[0];
+      if (ga30Row) {
+        analytics.last30d = {
+          pageViews: toInteger(metricValue(ga30Row, 0, 'screenPageViews')),
+          activeUsers: toInteger(metricValue(ga30Row, 1, 'activeUsers')),
+          avgSessionDuration: toNumber(metricValue(ga30Row, 2, 'averageSessionDuration')),
+          engagementRate: toNumber(metricValue(ga30Row, 3, 'engagementRate'))
+        };
+      } else if (ga30) {
+        analytics.warnings.push({ label: 'ga4_30d', message: `No GA4 rows returned for ${pagePath}` });
+      }
 
       // GA4: top 5 countries (last 90 days)
-      try {
-        const gaCountries = await callTool(googleMcp, 'ga4_run_report', {
-          dimensions: ['country'],
-          metrics: ['activeUsers'],
-          startDate: '90daysAgo',
-          endDate: 'yesterday',
-          dimensionFilter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT', value: pagePath } },
-          orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
-          limit: 5
-        });
-        const cData = JSON.parse(gaCountries);
-        analytics.topCountries = (cData?.data?.rows || []).map((r) => ({
-          country: r.dimensionValues?.[0]?.value || r.dimensions?.[0] || '',
-          users: parseInt(r.metricValues?.[0]?.value || '0')
-        }));
-      } catch (e) { /* skip */ }
+      const gaCountries = await callAnalyticsTool(article, analytics, googleMcp, 'ga4_countries', 'ga4_run_report', {
+        dimensions: ['country'],
+        metrics: ['activeUsers'],
+        start_date: '90daysAgo',
+        end_date: 'yesterday',
+        dimension_filter: gaPageFilter(pagePath),
+        order_bys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+        limit: 5
+      });
+      analytics.topCountries = analyticsRows(gaCountries)
+        .map((r) => ({
+          country: dimensionValue(r, 0, 'country'),
+          users: toInteger(metricValue(r, 0, 'activeUsers'))
+        }))
+        .filter((r) => r.country || r.users > 0);
+      if (gaCountries && analytics.topCountries.length === 0) {
+        analytics.warnings.push({ label: 'ga4_countries', message: `No country rows returned for ${pagePath}` });
+      }
 
       // GA4: top 5 traffic sources (last 90 days)
-      try {
-        const gaSources = await callTool(googleMcp, 'ga4_run_report', {
-          dimensions: ['sessionSource'],
-          metrics: ['activeUsers'],
-          startDate: '90daysAgo',
-          endDate: 'yesterday',
-          dimensionFilter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT', value: pagePath } },
-          orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
-          limit: 5
-        });
-        const sData = JSON.parse(gaSources);
-        analytics.topSources = (sData?.data?.rows || []).map((r) => ({
-          source: r.dimensionValues?.[0]?.value || r.dimensions?.[0] || '',
-          users: parseInt(r.metricValues?.[0]?.value || '0')
-        }));
-      } catch (e) { /* skip */ }
+      const gaSources = await callAnalyticsTool(article, analytics, googleMcp, 'ga4_sources', 'ga4_run_report', {
+        dimensions: ['sessionSource'],
+        metrics: ['activeUsers'],
+        start_date: '90daysAgo',
+        end_date: 'yesterday',
+        dimension_filter: gaPageFilter(pagePath),
+        order_bys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+        limit: 5
+      });
+      analytics.topSources = analyticsRows(gaSources)
+        .map((r) => ({
+          source: dimensionValue(r, 0, 'sessionSource'),
+          users: toInteger(metricValue(r, 0, 'activeUsers'))
+        }))
+        .filter((r) => r.source || r.users > 0);
+      if (gaSources && analytics.topSources.length === 0) {
+        analytics.warnings.push({ label: 'ga4_sources', message: `No source rows returned for ${pagePath}` });
+      }
 
       // GSC: top 5 queries driving traffic (last 28 days)
-      try {
-        const gscQueries = await callTool(googleMcp, 'gsc_search_analytics', {
+      if (publicUrl) {
+        const gscQueries = await callAnalyticsTool(article, analytics, googleMcp, 'gsc_queries', 'gsc_search_analytics', {
           dimensions: ['query'],
-          startDate: '28daysAgo',
-          endDate: 'yesterday',
-          dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'EXACT', expression: pagePath }] }],
-          rowLimit: 5
+          start_date: '28daysAgo',
+          end_date: 'yesterday',
+          dimension_filter_groups: [{ filters: [{ dimension: 'page', operator: 'equals', expression: publicUrl }] }],
+          row_limit: 5
         });
-        const qData = JSON.parse(gscQueries);
-        analytics.topQueries = (qData?.data?.rows || []).map((r) => ({
-          query: r.keys?.[0] || '',
-          clicks: r.clicks || 0,
-          impressions: r.impressions || 0,
-          ctr: r.ctr || 0,
-          position: r.position || 0
-        }));
-      } catch (e) { /* skip */ }
+        analytics.topQueries = analyticsRows(gscQueries)
+          .map((r) => ({
+            query: dimensionValue(r, 0, 'query'),
+            clicks: toInteger(metricValue(r, 0, 'clicks')),
+            impressions: toInteger(metricValue(r, 1, 'impressions')),
+            ctr: toNumber(metricValue(r, 2, 'ctr')),
+            position: toNumber(metricValue(r, 3, 'position'))
+          }))
+          .filter((r) => r.query || r.clicks > 0 || r.impressions > 0);
+        if (gscQueries && analytics.topQueries.length === 0) {
+          analytics.warnings.push({ label: 'gsc_queries', message: `No Search Console query rows returned for ${publicUrl}` });
+        }
+      } else {
+        analytics.topQueries = [];
+        analytics.warnings.push({ label: 'gsc_queries', message: 'No public URL available for Search Console page filtering' });
+      }
+
+      const hasUsefulData = !!analytics.last30d || analytics.topCountries.length > 0 || analytics.topSources.length > 0 || analytics.topQueries.length > 0;
+      analytics.status = analytics.errors.length && !hasUsefulData
+        ? 'failed'
+        : analytics.errors.length || analytics.warnings.length ? 'partial' : 'complete';
 
       existingContentStore.add({ ...article, analytics });
       done++;
