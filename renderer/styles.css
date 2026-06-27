@@ -2218,6 +2218,48 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   white-space: pre-wrap;
 }
 
+.profile-detail-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  white-space: normal;
+}
+
+.profile-detail-field {
+  display: grid;
+  gap: 5px;
+}
+
+.profile-detail-label,
+.profile-detail-platform-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-detail-value {
+  color: var(--text-soft);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.profile-detail-platform {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-detail-platform:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.profile-detail-platform-title {
+  font-size: 14px;
+}
+
 /* ── Ready Modal (article review) ────────────── */
 .ready-modal {
   max-width: 95vw;

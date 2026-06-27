@@ -99,6 +99,7 @@ CC.views.settings = {
               <div class="ui-list-item-sub">${CC.escapeHtml((vp.identity || '').slice(0, 80))}...</div>
             </div>
             <div class="ui-actions ui-list-item-actions">
+              ${CC.ui.button('View', { variant: 'ghost', data: { 'vp-view': vp.id } })}
               ${!vp.isDefault ? `<button class="icon-btn" data-vp-remove="${vp.id}">&times;</button>` : ''}
             </div>
           </div>
@@ -116,12 +117,83 @@ CC.views.settings = {
               <div class="ui-list-item-sub">Platforms: ${Object.keys(pp.platforms || {}).join(', ')}</div>
             </div>
             <div class="ui-actions ui-list-item-actions">
+              ${CC.ui.button('View', { variant: 'ghost', data: { 'pp-view': pp.id } })}
               ${!pp.isDefault ? `<button class="icon-btn" data-pp-remove="${pp.id}">&times;</button>` : ''}
             </div>
           </div>
         `).join('')}
       </div>
     </div>`;
+  },
+
+  renderProfileDetailField(label, value) {
+    if (!value) return '';
+    return `<div class="profile-detail-field">
+      <div class="profile-detail-label">${CC.escapeHtml(label)}</div>
+      <div class="profile-detail-value">${CC.escapeHtml(value)}</div>
+    </div>`;
+  },
+
+  renderVoiceProfileDetail(vp) {
+    const fields = [
+      ['Identity', vp.identity],
+      ['Tone', vp.tone],
+      ['Humor Style', vp.humorStyle],
+      ['Sentence Structure', vp.sentenceStructure],
+      ['Vocabulary Tendencies', vp.vocabularyTendencies],
+      ['Contractions', vp.contractions],
+      ['Punctuation', vp.punctuation],
+      ['Paragraph Structure', vp.paragraphStructure],
+      ['Opening Moves', vp.openingMoves],
+      ['Closing Moves', vp.closingMoves],
+      ['Content Philosophy', vp.contentPhilosophy],
+      ['Credibility', vp.credibility],
+      ['Audience Relationship', vp.audienceRelationship],
+      ['Anti-Patterns', vp.antiPatterns]
+    ].map(([label, value]) => this.renderProfileDetailField(label, value)).join('');
+
+    return fields || CC.ui.inlineEmpty('No voice profile details are available.');
+  },
+
+  renderPlatformProfileDetail(pp) {
+    const platformLabels = {
+      linkedin: 'LinkedIn',
+      facebook: 'Facebook',
+      twitter: 'Twitter/X',
+      email: 'Email'
+    };
+    const platforms = Object.entries(pp.platforms || {});
+
+    if (platforms.length === 0) {
+      return CC.ui.inlineEmpty('No platform rules are available.');
+    }
+
+    return platforms.map(([platform, rules]) => {
+      const safeRules = rules || {};
+      const fields = [
+        ['Hook Patterns', safeRules.hookPatterns],
+        ['Structure Rules', safeRules.structureRules],
+        ['Length Guidance', safeRules.lengthGuidance],
+        ['CTA Conventions', safeRules.ctaConventions],
+        ['Link Strategy', safeRules.linkStrategy]
+      ].map(([label, value]) => this.renderProfileDetailField(label, value)).join('');
+
+      return `<div class="profile-detail-platform">
+        <div class="profile-detail-platform-title">${CC.escapeHtml(platformLabels[platform] || platform)}</div>
+        ${fields || CC.ui.inlineEmpty('No rules saved for this platform.')}
+      </div>`;
+    }).join('');
+  },
+
+  openProfileDetailModal(title, content) {
+    const modal = document.getElementById('existing-modal');
+    const modalTitle = document.getElementById('existing-modal-title');
+    const modalBody = document.getElementById('existing-modal-body');
+    if (!modal || !modalTitle || !modalBody) return;
+
+    modalTitle.textContent = title;
+    modalBody.innerHTML = `<div class="profile-detail-modal">${content}</div>`;
+    modal.classList.remove('hidden');
   },
 
   initProfile() {
@@ -152,6 +224,22 @@ CC.views.settings = {
       if (result) { await CC.refresh('platformProfiles'); CC.navigate('settings'); }
     });
 
+    document.querySelectorAll('[data-vp-view]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const profile = CC.state.voiceProfiles.find((vp) => vp.id === btn.dataset.vpView);
+        if (!profile) return;
+        this.openProfileDetailModal(profile.name, this.renderVoiceProfileDetail(profile));
+      });
+    });
+
+    document.querySelectorAll('[data-pp-view]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const profile = CC.state.platformProfiles.find((pp) => pp.id === btn.dataset.ppView);
+        if (!profile) return;
+        this.openProfileDetailModal(profile.name, this.renderPlatformProfileDetail(profile));
+      });
+    });
+
     document.querySelectorAll('[data-vp-remove]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         await CC.api.voiceProfiles.remove(btn.dataset.vpRemove);
@@ -166,6 +254,10 @@ CC.views.settings = {
         await CC.refresh('platformProfiles');
         CC.navigate('settings');
       });
+    });
+
+    document.getElementById('existing-modal-close')?.addEventListener('click', () => {
+      document.getElementById('existing-modal')?.classList.add('hidden');
     });
   },
 
