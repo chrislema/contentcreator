@@ -8,7 +8,7 @@ CC.views.drafts = {
 
     if (drafts.length === 0) {
       return `${CC.header('Drafts', 'Collaborative drafting workspace', `
-        <button class="btn-primary btn-sm" id="draft-new">+ New Draft</button>
+        ${CC.ui.button('+ New Draft', { id: 'draft-new' })}
       `)}
         <div class="section-body">
           ${this.renderNewDraftForm()}
@@ -33,7 +33,7 @@ CC.views.drafts = {
     const lastAssistant = [...conv].reverse().find((m) => m.role === 'assistant');
 
     return `${CC.header('Drafts', 'Collaborative drafting workspace', `
-      <button class="btn-primary btn-sm" id="draft-new">+ New Draft</button>
+      ${CC.ui.button('+ New Draft', { id: 'draft-new' })}
     `)}
     ${this.showNewForm ? this.renderNewDraftForm() : ''}
     <div class="draft-layout">
@@ -43,21 +43,21 @@ CC.views.drafts = {
       <div class="draft-workspace">
         <div class="draft-header">
           <div>
-            <div style="font-size:15px;font-weight:700">${CC.escapeHtml(draft.title)}</div>
-            <div style="font-size:12px;color:var(--muted)">${draft.status === 'published' ? 'Published' : draft.status === 'ready' ? 'Ready for distribution' : 'Drafting'}</div>
+            <div class="ui-card-title draft-title">${CC.escapeHtml(draft.title)}</div>
+            <div class="ui-card-meta draft-status">${draft.status === 'published' ? 'Published' : draft.status === 'ready' ? 'Ready for distribution' : 'Drafting'}</div>
           </div>
-          <div class="draft-header-actions">
+          <div class="ui-actions draft-header-actions">
             ${draft.status === 'drafting'
-              ? `<button class="btn-primary btn-sm" data-draft-ready="${draft.id}">Mark Ready</button>`
+              ? CC.ui.button('Mark Ready', { data: { 'draft-ready': draft.id } })
               : draft.status === 'ready'
-                ? `<button class="btn-ghost btn-sm" data-draft-ready="${draft.id}">Update Article</button><button class="btn-ghost btn-sm" data-draft-distribute="${draft.id}">Send to Distribution</button>`
+                ? `${CC.ui.button('Update Article', { variant: 'ghost', data: { 'draft-ready': draft.id } })}${CC.ui.button('Send to Distribution', { variant: 'ghost', data: { 'draft-distribute': draft.id } })}`
                 : ''
             }
-            <button class="btn-danger btn-sm" data-draft-remove="${draft.id}">Delete</button>
+            ${CC.ui.button('Delete', { variant: 'danger', data: { 'draft-remove': draft.id } })}
           </div>
         </div>
         <div class="draft-conversation" id="draft-conv">
-          ${conv.length === 0 ? `<div class="empty-state" style="padding:40px"><p>No messages yet.</p><p class="muted">Add instructions or a story below and hit Generate.</p></div>` : ''}
+          ${conv.length === 0 ? `<div class="empty-state conversation-empty"><p>No messages yet.</p><p class="muted">Add instructions or a story below and hit Generate.</p></div>` : ''}
           ${conv.map((m) => {
             const roleName = m.role === 'user' ? 'You' : (CC.state.models.find((mo) => mo.id === draft.modelId)?.displayName || 'AI');
             return `<div class="msg ${m.role}">
@@ -69,8 +69,8 @@ CC.views.drafts = {
         <div class="draft-input-area">
           <textarea id="draft-input" placeholder="Add a story, example, case study, different take, or instructions..." rows="3">${CC.escapeHtml(this.inputText)}</textarea>
           <div class="draft-input-actions">
-            <span style="font-size:12px;color:var(--muted)">Model: ${CC.escapeHtml(CC.state.models.find((m) => m.id === draft.modelId)?.displayName || 'Not set')}</span>
-            <button class="btn-primary btn-sm" id="draft-generate">Generate / Update</button>
+            <span class="ui-note draft-model-note">Model: ${CC.escapeHtml(CC.state.models.find((m) => m.id === draft.modelId)?.displayName || 'Not set')}</span>
+            ${CC.ui.button('Generate / Update', { id: 'draft-generate' })}
           </div>
         </div>
       </div>
@@ -85,7 +85,7 @@ CC.views.drafts = {
     const voice = CC.state.voiceProfiles?.find((v) => v.isDefault) || CC.state.voiceProfiles?.[0];
     const activeFws = (CC.state.frameworks || []).filter((f) => f.active);
 
-    return `<div id="draft-new-form" class="mcp-form" style="${this.showNewForm ? '' : 'display:none'}">
+    return `<div id="draft-new-form" class="ui-form-panel mcp-form ${this.showNewForm ? '' : 'hidden'}">
       <div class="form-group">
         <label>Subject</label>
         <input id="nd-title" type="text" placeholder="What is this about?" />
@@ -116,10 +116,10 @@ CC.views.drafts = {
           ${topics.map((t) => `<option value="${t.id}">${CC.escapeHtml(t.title)}</option>`).join('')}
         </select>
       </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn-primary btn-sm" id="nd-create">Create Draft</button>
-        <button class="btn-ghost btn-sm" id="nd-cancel">Cancel</button>
-      </div>
+      ${CC.ui.formActions(`
+        ${CC.ui.button('Create Draft', { id: 'nd-create' })}
+        ${CC.ui.button('Cancel', { id: 'nd-cancel', variant: 'ghost' })}
+      `)}
     </div>`;
   },
 
@@ -202,29 +202,29 @@ CC.views.drafts = {
     modal.innerHTML = `<div class="modal ready-modal">
       <div class="modal-header">
         <h3>Review Article: ${CC.escapeHtml(draft.title)}</h3>
-        <button class="btn-ghost btn-sm" id="ready-modal-close">Close</button>
+        ${CC.ui.button('Close', { id: 'ready-modal-close', variant: 'ghost' })}
       </div>
       <div class="ready-modal-body">
         <div class="ready-modal-sidebar">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-2);font-weight:700;margin-bottom:10px">AI Responses (${assistantMsgs.length})</div>
+          <div class="ui-kicker ready-section-label">AI Responses (${assistantMsgs.length})</div>
           <div class="ready-version-list">
             ${assistantMsgs.map((m, i) => {
               const preview = m.content.slice(0, 80).replace(/\n/g, ' ');
               const len = m.content.length;
               const hasHeading = /^#{1,3}\s/m.test(m.content);
               return `<div class="ready-version-item ${m.content === defaultArticle ? 'active' : ''}" data-version-idx="${i}">
-                <div class="ready-version-label">${i + 1}. ${hasHeading ? '<span class="badge accent" style="font-size:9px">Article</span>' : ''} ${len} chars</div>
+                <div class="ready-version-label">${i + 1}. ${hasHeading ? CC.ui.badge('Article', { tone: 'accent', size: 'sm' }) : ''} ${len} chars</div>
                 <div class="ready-version-preview">${CC.escapeHtml(preview)}...</div>
               </div>`;
             }).join('')}
           </div>
         </div>
         <div class="ready-modal-editor">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-2);font-weight:700;margin-bottom:8px">Article Content (editable)</div>
+          <div class="ui-kicker ready-section-label">Article Content (editable)</div>
           <textarea id="ready-article-text" class="ready-article-editor">${CC.escapeHtml(defaultArticle)}</textarea>
-          <div class="ready-modal-actions">
-            <button class="btn-primary btn-sm" id="ready-confirm">Mark Ready &amp; Save</button>
-            <button class="btn-ghost btn-sm" id="ready-cancel">Cancel</button>
+          <div class="ui-actions ready-modal-actions">
+            ${CC.ui.button('Mark Ready & Save', { id: 'ready-confirm' })}
+            ${CC.ui.button('Cancel', { id: 'ready-cancel', variant: 'ghost' })}
           </div>
         </div>
       </div>

@@ -14,12 +14,12 @@ CC.views.topics = {
     const hasScores = topics.some((t) => t.scores);
 
     return `${CC.header('Topics', 'Strategically ranked topic ideas from your data', `
-      <button class="btn-primary btn-sm" id="topic-generate">Generate Topics</button>
-      <button class="btn-ghost btn-sm" id="topic-add">+ Add Topic</button>
+      ${CC.ui.button('Generate Topics', { id: 'topic-generate' })}
+      ${CC.ui.button('+ Add Topic', { id: 'topic-add', variant: 'ghost' })}
     `)}
     <div class="section-body">
       ${this.lastSources ? `<div class="topic-source-summary">Generated from: ${CC.escapeHtml(this.lastSources)}</div>` : ''}
-      <div class="toolbar">
+      <div class="ui-toolbar toolbar">
         <input id="topic-search" type="text" placeholder="Search topics..." value="${CC.escapeHtml(this.searchQuery)}" />
         <select id="topic-filter-segment">
           <option value="">All segments</option>
@@ -39,7 +39,7 @@ CC.views.topics = {
         </select>
       </div>
       ${topics.length === 0 ? CC.empty('No topics yet.', 'Generate topics from your connected data or add one manually.') : ''}
-      <div class="card-grid">
+      <div class="ui-grid card-grid">
         ${topics.map((t, i) => this.renderCard(t, i, hasScores)).join('')}
       </div>
     </div>`;
@@ -74,13 +74,13 @@ CC.views.topics = {
     const rank = hasScores ? idx + 1 : null;
     const isCompleted = t.status === 'completed' || t.status === 'published';
 
-    return `<div class="card ${rank === 1 ? 'card-top-ranked' : ''} ${isCompleted ? 'card-completed' : ''}" data-topic-id="${t.id}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div class="card-title">${rank ? `<span class="topic-rank">#${rank}</span> ` : ''}${CC.escapeHtml(t.title)}</div>
+    return `<div class="ui-card card ${rank === 1 ? 'card-top-ranked' : ''} ${isCompleted ? 'card-completed' : ''}" data-topic-id="${t.id}">
+      <div class="ui-card-header topic-card-header">
+        <div class="ui-card-title card-title">${rank ? `<span class="topic-rank">#${rank}</span> ` : ''}${CC.escapeHtml(t.title)}</div>
         ${scores && !isCompleted
           ? `<span class="topic-score"><span class="topic-score-num">${scores.total}</span><span class="topic-score-max">/50</span></span>`
           : isCompleted
-            ? '<span class="badge ok">Completed</span>'
+            ? CC.ui.badge('Completed', { tone: 'ok' })
             : `<span class="priority priority-${p}"><span class="priority-dot"></span> P${p}</span>`
         }
       </div>
@@ -93,15 +93,15 @@ CC.views.topics = {
         <span class="topic-score-pill" title="Uniqueness: Contrarian or non-obvious angle">Unique ${scores.uniqueness}</span>
       </div>` : ''}
       ${t.rationale ? `<div class="topic-rationale">${CC.escapeHtml(t.rationale)}</div>` : ''}
-      <div class="topic-tags-row">
-        ${t.target ? `<span class="badge accent">${CC.escapeHtml(t.target)}</span>` : ''}
-        ${(t.cmsTags || []).map((tag) => `<span class="badge">${CC.escapeHtml(tag)}</span>`).join('')}
-        <span class="badge dim">${CC.escapeHtml(t.status || 'idea')}</span>
+      <div class="ui-tags topic-tags-row">
+        ${t.target ? CC.ui.badge(t.target, { tone: 'accent' }) : ''}
+        ${(t.cmsTags || []).map((tag) => CC.ui.badge(tag)).join('')}
+        ${CC.ui.badge(t.status || 'idea', { tone: 'dim' })}
       </div>
-      ${isCompleted ? '' : `<div class="topic-actions-row">
-        <button class="btn-primary btn-sm" data-topic-draft="${t.id}">Draft</button>
-        <button class="btn-ghost btn-sm" data-topic-edit="${t.id}">Edit</button>
-        <button class="btn-danger btn-sm" data-topic-remove="${t.id}">Delete</button>
+      ${isCompleted ? '' : `<div class="ui-actions topic-actions-row">
+        ${CC.ui.button('Draft', { data: { 'topic-draft': t.id } })}
+        ${CC.ui.button('Edit', { variant: 'ghost', data: { 'topic-edit': t.id } })}
+        ${CC.ui.button('Delete', { variant: 'danger', data: { 'topic-remove': t.id } })}
       </div>`}
     </div>`;
   },

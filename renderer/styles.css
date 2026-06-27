@@ -19,9 +19,18 @@
   --info: #2563eb;
   --radius: 10px;
   --radius-sm: 7px;
+  --radius-xs: 4px;
   --shadow: 0 1px 3px rgba(26,39,68,0.08), 0 2px 8px rgba(26,39,68,0.05);
   --sidebar-w: 210px;
   --sidebar-w-collapsed: 52px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --content-pad-x: 24px;
+  --content-pad-y: 20px;
 }
 
 * { box-sizing: border-box; }
@@ -215,7 +224,147 @@ body {
 }
 
 .section-body {
-  padding: 20px 24px 60px;
+  padding: var(--content-pad-y) var(--content-pad-x) 60px;
+}
+
+/* ── Design System Primitives ───────────────────
+   These classes are the shared UI contract. View-specific classes can extend
+   them, but new screens should start here. */
+.ui-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ui-grid {
+  display: grid;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.ui-grid.two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ui-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ui-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+  box-shadow: var(--shadow);
+}
+
+.ui-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.ui-card-heading {
+  min-width: 0;
+}
+
+.ui-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ui-card-subtitle {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+.ui-card-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.ui-card-actions {
+  flex-shrink: 0;
+}
+
+.ui-form-panel {
+  max-width: 520px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-top: 24px;
+}
+
+.ui-form-actions {
+  margin-top: 4px;
+}
+
+.ui-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.ui-section-title {
+  font-size: 14px;
+  margin: 20px 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-2);
+}
+
+.ui-inline-empty {
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.ui-kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+.ui-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ui-note-block {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+.is-muted {
+  opacity: 0.5;
+}
+
+@media (max-width: 900px) {
+  .ui-grid.two-col {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Sub-tabs (Settings) ──────────────────────── */
@@ -318,6 +467,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.4px;
+}
+
+.form-label-note {
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .form-group input,
@@ -475,6 +631,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 14px;
 }
 
+.topic-card-header {
+  margin-bottom: 6px;
+}
+
 .card-title {
   font-size: 15px;
   font-weight: 700;
@@ -491,6 +651,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .card-meta {
   font-size: 11.5px;
   color: var(--muted);
+}
+
+.metric-ok {
+  color: var(--accent);
+}
+
+.metric-danger {
+  color: var(--danger);
 }
 
 /* ── Badges ───────────────────────────────────── */
@@ -510,7 +678,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .badge.info { color: #1e40af; background: #e0e7ff; border-color: #a5b4fc; }
 .badge.warn { color: var(--warn); border-color: #e3c89a; background: #fbf0dd; }
 .badge.ok { color: var(--ok); background: #ecfccb; border-color: #bef264; }
+.badge.danger { color: var(--danger); background: #fef2f2; border-color: #fecaca; }
 .badge.dim { color: var(--muted); background: transparent; }
+.badge.sm {
+  font-size: 10.5px;
+  padding: 1px 7px;
+}
 
 /* ── Toggle Switch ────────────────────────────── */
 .toggle {
@@ -557,6 +730,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.fw-card-actions {
+  margin-top: 6px;
 }
 
 .fw-card.inactive { opacity: 0.5; }
@@ -640,6 +817,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .empty-state p { margin: 4px 0; }
 .empty-state .muted { color: var(--muted); font-size: 13px; }
+.empty-state.compact { padding: 30px; }
+.empty-state.conversation-empty { padding: 40px; }
 
 /* ── Toolbar ──────────────────────────────────── */
 .toolbar {
@@ -1040,6 +1219,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 32px;
 }
 
+.dist-generated-card {
+  margin-bottom: 14px;
+}
+
+.dist-generated-header {
+  margin-bottom: 12px;
+}
+
 .dist-url-row {
   display: flex;
   align-items: center;
@@ -1280,9 +1467,28 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: stretch;
 }
 
+.profile-form {
+  max-width: none;
+  width: 100%;
+}
+
+.profile-form .form-row {
+  flex-direction: column;
+  gap: 0;
+}
+
 .profile-card {
   min-width: 0;
   height: 100%;
+}
+
+.profile-card .ui-card-header {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.profile-card .ui-card-actions {
+  margin-left: auto;
 }
 
 .util-desc {
@@ -1410,6 +1616,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .util-enrich-status {
   margin-top: 8px;
+}
+
+.util-status-badge {
+  margin-top: 10px;
 }
 
 /* ── Analytics Panel ───────────────────────────── */
@@ -1573,6 +1783,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .mcp-section > #model-add,
 .mcp-section > #existing-import {
   align-self: flex-end;
+}
+
+.mcp-section > .mcp-section-actions {
+  align-self: flex-end;
+  margin-bottom: 16px;
 }
 
 .existing-import-row {
@@ -1990,6 +2205,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.ready-section-label {
+  margin-bottom: 10px;
 }
 
 .ready-version-item {

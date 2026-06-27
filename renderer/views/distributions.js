@@ -14,12 +14,12 @@ CC.views.distributions = {
       ${ready.length === 0 && dists.length === 0 ? CC.empty('No drafts ready for distribution.', 'Mark a draft as Ready in the Drafts view to start distributing.') : ''}
 
       ${ready.length > 0 ? `
-        <h3 style="font-size:14px;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-2)">Ready for Distribution</h3>
+        ${CC.ui.sectionTitle('Ready for Distribution')}
         ${ready.map((d) => this.renderDistCard(d)).join('')}
       ` : ''}
 
       ${dists.length > 0 ? `
-        <h3 style="font-size:14px;margin:24px 0 12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-2)">Generated Distributions</h3>
+        ${CC.ui.sectionTitle('Generated Distributions')}
         ${dists.map((dist) => this.renderDist(dist)).join('')}
       ` : ''}
     </div>`;
@@ -58,18 +58,18 @@ CC.views.distributions = {
     const panelHtml = openPanel ? this.renderPanel(d, openPanel) : '';
 
     return `<div class="dist-card-wrapper" data-dist-card="${d.id}">
-      <div class="card dist-card">
+      <div class="ui-card card dist-card">
         <div class="dist-card-left">
-          <div class="card-title">${CC.escapeHtml(displayTitle)}</div>
+          <div class="ui-card-title card-title">${CC.escapeHtml(displayTitle)}</div>
           ${d.summary
             ? `<div class="dist-summary">${CC.escapeHtml(d.summary)}</div>`
             : `<div class="dist-summary dist-summary-missing">
                 <span>No summary yet.</span>
-                <button class="btn-ghost btn-sm" data-gen-summary="${d.id}">Generate Summary</button>
+                ${CC.ui.button('Generate Summary', { variant: 'ghost', data: { 'gen-summary': d.id } })}
               </div>`
           }
-          <div class="topic-tags-row">
-            ${segmentName ? `<span class="badge accent">${CC.escapeHtml(segmentName)}</span>` : ''}
+          <div class="ui-tags topic-tags-row">
+            ${segmentName ? CC.ui.badge(segmentName, { tone: 'accent' }) : ''}
           </div>
           <details class="dist-article-details">
             <summary class="dist-article-summary">View full article</summary>
@@ -78,23 +78,19 @@ CC.views.distributions = {
           <div class="dist-url-row">
             <label class="dist-url-label">Public URL</label>
             <input class="dist-url-input" id="dist-url-${d.id}" value="${CC.escapeHtml(d.publicUrl || '')}" placeholder="https://chrislema.com/your-slug" data-url-input="${d.id}" />
-            <button class="btn-ghost btn-sm" data-url-save="${d.id}">Save</button>
+            ${CC.ui.button('Save', { variant: 'ghost', data: { 'url-save': d.id } })}
           </div>
         </div>
         <div class="dist-card-right">
           <div class="dist-status-list">
             ${this.PLATFORMS.map((p) => this.renderStatusRow(d, p)).join('')}
           </div>
-          <div class="dist-actions">
-            <button class="btn-primary btn-sm" data-open-panel="${d.id}" data-platform="site" ${d.sitePublishedAt ? 'disabled' : ''}>
-              ${d.sitePublishedAt ? 'Published to Site' : 'Publish to Site'}
-            </button>
-            <button class="btn-primary btn-sm" data-open-panel="${d.id}" data-platform="newsletter" ${d.newsletterPublishedAt ? 'disabled' : ''}>
-              ${d.newsletterPublishedAt ? 'Sent to Newsletter' : 'Send Newsletter'}
-            </button>
-            <button class="btn-ghost btn-sm" data-open-panel="${d.id}" data-platform="facebook">Draft FB Post</button>
-            <button class="btn-ghost btn-sm" data-open-panel="${d.id}" data-platform="twitter">Draft X Post</button>
-            <button class="btn-ghost btn-sm" data-open-panel="${d.id}" data-platform="linkedin">Draft LinkedIn Post</button>
+          <div class="ui-actions dist-actions">
+            ${CC.ui.button(d.sitePublishedAt ? 'Published to Site' : 'Publish to Site', { data: { 'open-panel': d.id, platform: 'site' }, disabled: !!d.sitePublishedAt })}
+            ${CC.ui.button(d.newsletterPublishedAt ? 'Sent to Newsletter' : 'Send Newsletter', { data: { 'open-panel': d.id, platform: 'newsletter' }, disabled: !!d.newsletterPublishedAt })}
+            ${CC.ui.button('Draft FB Post', { variant: 'ghost', data: { 'open-panel': d.id, platform: 'facebook' } })}
+            ${CC.ui.button('Draft X Post', { variant: 'ghost', data: { 'open-panel': d.id, platform: 'twitter' } })}
+            ${CC.ui.button('Draft LinkedIn Post', { variant: 'ghost', data: { 'open-panel': d.id, platform: 'linkedin' } })}
           </div>
         </div>
       </div>
@@ -130,30 +126,30 @@ CC.views.distributions = {
     return `<div class="dist-panel">
       <div class="dist-panel-header">
         <div class="dist-panel-header-left">
-          <span class="badge accent">${platLabel}</span>
-          <span style="font-size:12px;color:var(--muted)">Chat with the model to ${isMcpChat ? 'plan the send' : 'draft the post'}</span>
+          ${CC.ui.badge(platLabel, { tone: 'accent' })}
+          <span class="ui-note">Chat with the model to ${isMcpChat ? 'plan the send' : 'draft the post'}</span>
         </div>
-        <button class="btn-ghost btn-sm" data-panel-close="${d.id}">Close</button>
+        ${CC.ui.button('Close', { variant: 'ghost', data: { 'panel-close': d.id } })}
       </div>
       <div class="dist-panel-chat" id="dist-conv-${d.id}-${platform}">
         ${hasMessages
           ? conversation.map((m) => this.renderMsg(m, d)).join('')
-          : `<div class="empty-state" style="padding:30px"><p>No messages yet.</p><p class="muted">${emptyHint}</p></div>`
+          : `<div class="empty-state compact"><p>No messages yet.</p><p class="muted">${emptyHint}</p></div>`
         }
       </div>
       <div class="dist-panel-toolbar">
         <div class="dist-panel-input-row">
           <textarea class="dist-panel-input" id="dist-input-${d.id}-${platform}" placeholder="${CC.escapeHtml(placeholder)}" rows="2"></textarea>
-          <button class="btn-primary btn-sm" data-panel-send="${d.id}" data-platform="${platform}">Send</button>
+          ${CC.ui.button('Send', { data: { 'panel-send': d.id, platform } })}
         </div>
         <div class="dist-panel-toolbar-bottom">
           ${this.renderModelSelector(d.id, platform)}
           ${hasMessages ? `<div class="dist-panel-execute">
             ${platform === 'site'
-              ? `<button class="btn-primary btn-sm" data-site-execute="${d.id}" ${d.sitePublishedAt ? 'disabled' : ''}>${d.sitePublishedAt ? 'Published to Site' : 'Mark Published to Site'}</button>`
+              ? CC.ui.button(d.sitePublishedAt ? 'Published to Site' : 'Mark Published to Site', { data: { 'site-execute': d.id }, disabled: !!d.sitePublishedAt })
               : platform === 'newsletter'
-                ? `<button class="btn-primary btn-sm" data-newsletter-execute="${d.id}" ${d.newsletterPublishedAt ? 'disabled' : ''}>${d.newsletterPublishedAt ? 'Already Sent' : 'Mark Sent'}</button>`
-                : `<button class="btn-primary btn-sm" data-platform-publish="${d.id}" data-platform="${platform}">Publish to ${platLabel}</button>`
+                ? CC.ui.button(d.newsletterPublishedAt ? 'Already Sent' : 'Mark Sent', { data: { 'newsletter-execute': d.id }, disabled: !!d.newsletterPublishedAt })
+                : CC.ui.button(`Publish to ${platLabel}`, { data: { 'platform-publish': d.id, platform } })
             }
           </div>` : ''}
         </div>
@@ -191,16 +187,16 @@ CC.views.distributions = {
 
   renderDist(dist) {
     const posts = dist.platformPosts || [];
-    return `<div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div class="card-title">${CC.escapeHtml(dist.title || 'Untitled')}</div>
-        <span class="badge dim">${CC.fmtDate(dist.createdAt)}</span>
+    return `<div class="ui-card card dist-generated-card">
+      <div class="ui-card-header dist-generated-header">
+        <div class="ui-card-title card-title">${CC.escapeHtml(dist.title || 'Untitled')}</div>
+        ${CC.ui.badge(CC.fmtDate(dist.createdAt), { tone: 'dim' })}
       </div>
       ${posts.map((p) => `
-        <div class="platform-post">
+        <div class="ui-card platform-post">
           <div class="platform-post-head">
-            <span class="badge accent">${CC.escapeHtml(p.platform)}</span>
-            <button class="btn-ghost btn-sm" data-copy-post="${CC.escapeHtml(p.content)}">Copy</button>
+            ${CC.ui.badge(p.platform, { tone: 'accent' })}
+            ${CC.ui.button('Copy', { variant: 'ghost', data: { 'copy-post': p.content } })}
           </div>
           <div class="platform-post-content">${CC.escapeHtml(p.content)}</div>
         </div>
