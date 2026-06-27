@@ -48,17 +48,17 @@ window.CC = {
   },
 
   header(title, subtitle, actions) {
-    return `<div class="section-header">
+    return `<div class="section-header ui-section-header">
       <div>
         <h1>${this.escapeHtml(title)}</h1>
         ${subtitle ? `<div class="subtitle">${this.escapeHtml(subtitle)}</div>` : ''}
       </div>
-      <div class="header-actions">${actions || ''}</div>
+      <div class="header-actions ui-actions">${actions || ''}</div>
     </div>`;
   },
 
   empty(message, hint) {
-    return `<div class="empty-state">
+    return `<div class="empty-state ui-empty-state">
       <p>${this.escapeHtml(message)}</p>
       ${hint ? `<p class="muted">${this.escapeHtml(hint)}</p>` : ''}
     </div>`;

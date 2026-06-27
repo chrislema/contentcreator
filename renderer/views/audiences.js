@@ -3,9 +3,9 @@ CC.views.audiences = {
   html() {
     const audiences = CC.state.audiences || [];
     return `${CC.header('Audiences', 'Standalone audience segments that compete on their own', `
-      <button class="btn-ghost btn-sm" id="aud-import">Import .md</button>
+      ${CC.ui.button('Import .md', { id: 'aud-import', variant: 'ghost' })}
     `)}
-    <div class="audience-grid">
+    <div class="ui-grid audience-grid">
       ${audiences.length === 0
         ? CC.empty('No audience segments yet.', 'Import a markdown file to extract individual segments.')
         : audiences.map((a, i) => this.renderCard(a, i)).join('')
@@ -16,19 +16,19 @@ CC.views.audiences = {
   renderCard(a, idx) {
     const gp = a.goalPyramid || {};
     const forces = a.fourForces || {};
-    return `<div class="ms-card">
-      <div class="ms-card-header">
+    return `<div class="ui-card ms-card">
+      <div class="ui-card-header ms-card-header">
         <div class="ms-card-title-block">
-          <div class="ms-card-title">${CC.escapeHtml(a.name)}</div>
+          <div class="ui-card-title ms-card-title">${CC.escapeHtml(a.name)}</div>
           ${a.description ? `<div class="ms-card-desc">${CC.escapeHtml(a.description)}</div>` : ''}
-          <div class="ms-card-badges">
-            ${a.dominantForce ? `<span class="badge accent">${CC.escapeHtml(a.dominantForce)}</span>` : ''}
-            ${a.source ? `<span class="badge dim">${CC.escapeHtml(a.source)}</span>` : ''}
+          <div class="ui-tags ms-card-badges">
+            ${a.dominantForce ? CC.ui.badge(a.dominantForce, { tone: 'accent' }) : ''}
+            ${a.source ? CC.ui.badge(a.source, { tone: 'dim' }) : ''}
           </div>
         </div>
-        <div class="ms-card-actions">
-          <button class="btn-primary btn-sm" data-ms-toggle="${idx}">Details</button>
-          <button class="btn-danger btn-sm" data-aud-remove="${a.id}">Remove</button>
+        <div class="ui-actions ui-card-actions ms-card-actions">
+          ${CC.ui.button('Details', { data: { 'ms-toggle': idx } })}
+          ${CC.ui.button('Remove', { variant: 'danger', data: { 'aud-remove': a.id } })}
         </div>
       </div>
       <div class="ms-card-body" id="ms-body-${idx}">
@@ -50,13 +50,13 @@ CC.views.audiences = {
         </div>` : ''}
         ${(forces.push || forces.anxiety) ? `<div class="ms-section">
           <h5>Four Forces</h5>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-            ${forces.push ? `<span class="badge">Push: ${CC.escapeHtml(forces.push)}</span>` : ''}
-            ${forces.magnetism ? `<span class="badge">Magnetism: ${CC.escapeHtml(forces.magnetism)}</span>` : ''}
-            ${forces.anxiety ? `<span class="badge">Anxiety: ${CC.escapeHtml(forces.anxiety)}</span>` : ''}
-            ${forces.habit ? `<span class="badge">Habit: ${CC.escapeHtml(forces.habit)}</span>` : ''}
+          <div class="ui-tags ms-card-badges">
+            ${forces.push ? CC.ui.badge(`Push: ${forces.push}`) : ''}
+            ${forces.magnetism ? CC.ui.badge(`Magnetism: ${forces.magnetism}`) : ''}
+            ${forces.anxiety ? CC.ui.badge(`Anxiety: ${forces.anxiety}`) : ''}
+            ${forces.habit ? CC.ui.badge(`Habit: ${forces.habit}`) : ''}
           </div>
-          ${forces.netForce ? `<p style="font-size:13px;color:var(--muted);margin:4px 0 0;line-height:1.5">${CC.escapeHtml(forces.netForce)}</p>` : ''}
+          ${forces.netForce ? `<p class="ui-note-block">${CC.escapeHtml(forces.netForce)}</p>` : ''}
         </div>` : ''}
         ${(a.hiringMoments || []).length ? `<div class="ms-section">
           <h5>Hiring Moments</h5>

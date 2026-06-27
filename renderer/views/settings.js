@@ -51,7 +51,7 @@ CC.views.settings = {
   // ── Profile ──────────────────────────────
   renderProfile() {
     const p = CC.state.settings?.profile || {};
-    return `<div style="max-width:520px">
+    return `${CC.ui.formPanel(`
       <div class="form-group">
         <label>Name</label>
         <input id="pf-name" type="text" value="${CC.escapeHtml(p.name || '')}" />
@@ -84,42 +84,38 @@ CC.views.settings = {
           <input id="pf-website" type="text" value="${CC.escapeHtml(p.social?.website || '')}" />
         </div>
       </div>
-      <div style="display:flex;gap:12px;margin-top:8px">
-        <button class="btn-primary" id="pf-save">Save Profile</button>
-      </div>
-    </div>
+      ${CC.ui.formActions(CC.ui.button('Save Profile', { id: 'pf-save', size: false }))}
+    `, { className: 'profile-form' })}
 
     <div class="profile-cards-row">
-      <div class="util-card profile-card">
-        <h3 style="font-size:15px;margin:0 0 12px">Voice Profiles</h3>
-        <div style="margin-bottom:12px">
-          <button class="btn-ghost btn-sm" id="vp-import">Import Voice Profile (.md)</button>
-        </div>
+      <div class="ui-card util-card profile-card">
+        ${CC.ui.cardHeader(CC.escapeHtml('Voice Profiles'), {
+          actions: CC.ui.button('Import Voice Profile (.md)', { id: 'vp-import', variant: 'ghost' })
+        })}
         ${CC.state.voiceProfiles.map((vp) => `
-          <div class="list-item">
+          <div class="ui-list-item list-item">
             <div class="list-item-info">
-              <div class="list-item-title">${CC.escapeHtml(vp.name)} ${vp.isDefault ? '<span class="badge accent">default</span>' : ''}</div>
+              <div class="list-item-title">${CC.escapeHtml(vp.name)} ${vp.isDefault ? CC.ui.badge('default', { tone: 'accent' }) : ''}</div>
               <div class="list-item-sub">${CC.escapeHtml((vp.identity || '').slice(0, 80))}...</div>
             </div>
-            <div class="list-item-actions">
+            <div class="ui-actions list-item-actions">
               ${!vp.isDefault ? `<button class="icon-btn" data-vp-remove="${vp.id}">&times;</button>` : ''}
             </div>
           </div>
         `).join('')}
       </div>
 
-      <div class="util-card profile-card">
-        <h3 style="font-size:15px;margin:0 0 12px">Platform Profiles</h3>
-        <div style="margin-bottom:12px">
-          <button class="btn-ghost btn-sm" id="pp-import">Import Platform Profile (.md)</button>
-        </div>
+      <div class="ui-card util-card profile-card">
+        ${CC.ui.cardHeader(CC.escapeHtml('Platform Profiles'), {
+          actions: CC.ui.button('Import Platform Profile (.md)', { id: 'pp-import', variant: 'ghost' })
+        })}
         ${CC.state.platformProfiles.map((pp) => `
-          <div class="list-item">
+          <div class="ui-list-item list-item">
             <div class="list-item-info">
-              <div class="list-item-title">${CC.escapeHtml(pp.name)} ${pp.isDefault ? '<span class="badge accent">default</span>' : ''}</div>
+              <div class="list-item-title">${CC.escapeHtml(pp.name)} ${pp.isDefault ? CC.ui.badge('default', { tone: 'accent' }) : ''}</div>
               <div class="list-item-sub">Platforms: ${Object.keys(pp.platforms || {}).join(', ')}</div>
             </div>
-            <div class="list-item-actions">
+            <div class="ui-actions list-item-actions">
               ${!pp.isDefault ? `<button class="icon-btn" data-pp-remove="${pp.id}">&times;</button>` : ''}
             </div>
           </div>
@@ -179,8 +175,8 @@ CC.views.settings = {
   renderModels() {
     const models = CC.state.models || [];
     return `<div class="mcp-section">
-      <button class="btn-primary btn-sm" id="model-add">+ Add Model</button>
-      <div id="model-form" class="hidden mcp-form">
+      <div class="mcp-section-actions ui-actions">${CC.ui.button('+ Add Model', { id: 'model-add' })}</div>
+      <div id="model-form" class="hidden ui-form-panel mcp-form">
         <div class="form-row">
           <div class="form-group">
             <label>Display Name</label>
@@ -227,10 +223,10 @@ CC.views.settings = {
           <label>Max Output Tokens</label>
           <input id="m-maxTokens" type="number" value="8192" />
         </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn-primary btn-sm" id="m-save">Save Model</button>
-          <button class="btn-ghost btn-sm" id="m-cancel">Cancel</button>
-        </div>
+        ${CC.ui.formActions(`
+          ${CC.ui.button('Save Model', { id: 'm-save' })}
+          ${CC.ui.button('Cancel', { id: 'm-cancel', variant: 'ghost' })}
+        `)}
       </div>
       <div class="mcp-list">
         ${models.length === 0 ? CC.empty('No models configured.', 'Add an AI model to start generating content.') : models.map((m) => this.renderModelCard(m)).join('')}
@@ -243,25 +239,25 @@ CC.views.settings = {
     const connType = m.connectionType === 'oauth-cli' ? 'OAuth/CLI' : 'API Key';
     const tested = m.lastTested;
     const statusBadge = tested
-      ? (m.lastTestResult ? '<span class="badge ok">Working</span>' : '<span class="badge" style="color:var(--danger);border-color:var(--danger)">Failed</span>')
-      : '<span class="badge dim">Untested</span>';
+      ? (m.lastTestResult ? CC.ui.badge('Working', { tone: 'ok' }) : CC.ui.badge('Failed', { tone: 'danger' }))
+      : CC.ui.badge('Untested', { tone: 'dim' });
     const isDefault = CC.state.settings.defaultModelId === m.id;
-    const defaultBadge = isDefault ? '<span class="badge accent">Default</span>' : '';
+    const defaultBadge = isDefault ? CC.ui.badge('Default', { tone: 'accent' }) : '';
 
-    return `<div class="mcp-card ${isDefault ? 'mcp-card-highlighted' : ''}">
-      <div class="mcp-card-top">
-        <div class="mcp-card-name">${CC.escapeHtml(m.displayName || m.model)} ${statusBadge} ${defaultBadge}</div>
-        <div class="mcp-card-actions">
+    return `<div class="ui-card mcp-card ${isDefault ? 'mcp-card-highlighted' : ''}">
+      <div class="ui-card-header mcp-card-top">
+        <div class="ui-card-title mcp-card-name">${CC.escapeHtml(m.displayName || m.model)} ${statusBadge} ${defaultBadge}</div>
+        <div class="ui-actions ui-card-actions mcp-card-actions">
           ${isDefault
-            ? '<span style="font-size:12px;color:var(--accent);font-weight:600;padding:4px 8px">Default Model</span>'
-            : `<button class="btn-ghost btn-sm" data-model-default="${m.id}">Set Default</button>`
+            ? CC.ui.badge('Default Model', { tone: 'accent' })
+            : CC.ui.button('Set Default', { variant: 'ghost', data: { 'model-default': m.id } })
           }
-          <button class="btn-primary btn-sm" data-model-test="${m.id}">Test</button>
-          <button class="btn-ghost btn-sm" data-model-edit="${m.id}">Edit</button>
-          <button class="btn-ghost btn-sm" data-model-remove="${m.id}">Remove</button>
+          ${CC.ui.button('Test', { data: { 'model-test': m.id } })}
+          ${CC.ui.button('Edit', { variant: 'ghost', data: { 'model-edit': m.id } })}
+          ${CC.ui.button('Remove', { variant: 'ghost', data: { 'model-remove': m.id } })}
         </div>
       </div>
-      <div class="mcp-card-url">
+      <div class="ui-card-meta mcp-card-url">
         ${CC.escapeHtml(m.provider)} &middot; ${CC.escapeHtml(m.model)} &middot; ${connType}
         ${m.baseUrl ? `<br>${CC.escapeHtml(m.baseUrl)}` : ''}
         ${m.cliPath ? `<br>CLI: ${CC.escapeHtml(m.cliPath)}` : ''}
@@ -306,7 +302,7 @@ CC.views.settings = {
             }).join('')}
           </select>
         </div>
-        <span class="badge ${workingCount > 0 ? 'ok' : 'dim'}">${workingCount}/${modelCount} working</span>
+        ${CC.ui.badge(`${workingCount}/${modelCount} working`, { tone: workingCount > 0 ? 'ok' : 'dim' })}
         ${history.length > 0 ? '<button class="mcp-chat-clear" id="model-chat-clear">Clear chat</button>' : ''}
       </div>
     </div>`;
@@ -521,21 +517,21 @@ CC.views.settings = {
       'psychological-triggers': 'Psychological Triggers'
     };
 
-    let html = `<div class="toolbar">
+    let html = `<div class="ui-toolbar toolbar">
       <input id="fw-search" type="text" placeholder="Search frameworks..." />
-      <span class="badge dim">${fws.filter(f => f.active).length} active / ${fws.length} total</span>
-      <button class="btn-ghost btn-sm" id="fw-add-custom">+ Add Custom</button>
+      ${CC.ui.badge(`${fws.filter(f => f.active).length} active / ${fws.length} total`, { tone: 'dim' })}
+      ${CC.ui.button('+ Add Custom', { id: 'fw-add-custom', variant: 'ghost' })}
     </div>`;
 
     for (const [cat, items] of Object.entries(cats)) {
-      html += `<h3 style="font-size:14px;margin:20px 0 10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-2)">${catLabels[cat] || cat} <span class="badge dim">${items.length}</span></h3>`;
+      html += CC.ui.sectionTitle(catLabels[cat] || cat, items.length);
       html += '<div class="card-grid">';
       for (const fw of items) {
-        html += `<div class="card fw-card ${fw.active ? '' : 'inactive'}" data-fw-id="${fw.id}">
-          <div class="fw-card-head">
+        html += `<div class="ui-card card fw-card ${fw.active ? '' : 'inactive'}" data-fw-id="${fw.id}">
+          <div class="ui-card-header fw-card-head">
             <div>
-              <div class="card-title">${CC.escapeHtml(fw.name)}</div>
-              <div class="fw-category">${CC.escapeHtml(catLabels[cat] || cat)} &middot; Stage ${fw.stage}</div>
+              <div class="ui-card-title card-title">${CC.escapeHtml(fw.name)}</div>
+              <div class="ui-card-meta fw-category">${CC.escapeHtml(catLabels[cat] || cat)} &middot; Stage ${fw.stage}</div>
             </div>
             <label class="toggle">
               <input type="checkbox" data-fw-toggle="${fw.id}" ${fw.active ? 'checked' : ''} />
@@ -543,7 +539,7 @@ CC.views.settings = {
             </label>
           </div>
           <div class="card-desc">${CC.escapeHtml(fw.description)}</div>
-          ${fw.custom ? `<button class="btn-danger btn-sm" data-fw-remove="${fw.id}" style="margin-top:6px">Delete</button>` : ''}
+          ${fw.custom ? CC.ui.actions(CC.ui.button('Delete', { variant: 'danger', data: { 'fw-remove': fw.id } }), { className: 'fw-card-actions' }) : ''}
         </div>`;
       }
       html += '</div>';
@@ -593,8 +589,8 @@ CC.views.settings = {
   renderMcps() {
     const mcps = CC.state.mcps || [];
     return `<div class="mcp-section">
-      <button class="btn-primary btn-sm" id="mcp-add">+ Add MCP</button>
-      <div id="mcp-form" class="hidden mcp-form">
+      <div class="mcp-section-actions ui-actions">${CC.ui.button('+ Add MCP', { id: 'mcp-add' })}</div>
+      <div id="mcp-form" class="hidden ui-form-panel mcp-form">
         <div class="form-group">
           <label>Name</label>
           <input id="mcp-name" type="text" placeholder="ContentStudio" />
@@ -620,7 +616,7 @@ CC.views.settings = {
             </select>
           </div>
           <div class="form-group" id="mcp-token-group">
-            <label>Token / Key <span style="font-weight:400;color:var(--muted)">(not needed for OAuth)</span></label>
+            <label>Token / Key <span class="form-label-note">(not needed for OAuth)</span></label>
             <input id="mcp-token" type="password" placeholder="..." />
           </div>
         </div>
@@ -638,10 +634,10 @@ CC.views.settings = {
             <textarea id="mcp-env" rows="3" placeholder="CONTENTSTUDIO_API_KEY=your-key-here"></textarea>
           </div>
         </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn-primary btn-sm" id="mcp-save">Save</button>
-          <button class="btn-ghost btn-sm" id="mcp-cancel">Cancel</button>
-        </div>
+        ${CC.ui.formActions(`
+          ${CC.ui.button('Save', { id: 'mcp-save' })}
+          ${CC.ui.button('Cancel', { id: 'mcp-cancel', variant: 'ghost' })}
+        `)}
       </div>
       <div id="mcp-list" class="mcp-list">
         ${mcps.length === 0 ? CC.empty('No MCPs connected.', 'Add connections to your CMS, newsletter, analytics, etc.') : mcps.map((m) => this.renderMcpCard(m)).join('')}
@@ -654,30 +650,30 @@ CC.views.settings = {
     const connected = m.connected;
     const toolCount = m.toolCount || 0;
     const statusBadge = connected
-      ? `<span class="badge ok">Connected</span>`
-      : `<span class="badge dim">Not connected</span>`;
+      ? CC.ui.badge('Connected', { tone: 'ok' })
+      : CC.ui.badge('Not connected', { tone: 'dim' });
 
-    return `<div class="mcp-card">
-      <div class="mcp-card-top">
-        <div class="mcp-card-name">${CC.escapeHtml(m.name)} ${statusBadge}</div>
-        <div class="mcp-card-actions">
+    return `<div class="ui-card mcp-card">
+      <div class="ui-card-header mcp-card-top">
+        <div class="ui-card-title mcp-card-name">${CC.escapeHtml(m.name)} ${statusBadge}</div>
+        <div class="ui-actions ui-card-actions mcp-card-actions">
           ${connected
-            ? `<button class="btn-danger btn-sm" data-mcp-disconnect="${m.id}">Disconnect</button>`
-            : `<button class="btn-primary btn-sm" data-mcp-connect="${m.id}">Connect</button>`
+            ? CC.ui.button('Disconnect', { variant: 'danger', data: { 'mcp-disconnect': m.id } })
+            : CC.ui.button('Connect', { data: { 'mcp-connect': m.id } })
           }
-          <button class="btn-ghost btn-sm" data-mcp-edit="${m.id}">Edit</button>
-          <button class="btn-ghost btn-sm" data-mcp-remove="${m.id}">Remove</button>
+          ${CC.ui.button('Edit', { variant: 'ghost', data: { 'mcp-edit': m.id } })}
+          ${CC.ui.button('Remove', { variant: 'ghost', data: { 'mcp-remove': m.id } })}
         </div>
       </div>
-      <div class="mcp-card-url">
+      <div class="ui-card-meta mcp-card-url">
         ${m.transport === 'stdio'
           ? `${CC.escapeHtml(m.command || 'npx')} ${CC.escapeHtml((m.args || []).join(' '))}`
           : `${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}`
         }
-        ${connected ? ` &middot; <span style="color:var(--accent)">${toolCount} tools</span>` : ''}
-        ${m.lastError ? ` &middot; <span style="color:var(--danger)">${CC.escapeHtml(m.lastError)}</span>` : ''}
+        ${connected ? ` &middot; <span class="metric-ok">${toolCount} tools</span>` : ''}
+        ${m.lastError ? ` &middot; <span class="metric-danger">${CC.escapeHtml(m.lastError)}</span>` : ''}
       </div>
-      ${connected && m.tools && m.tools.length ? `<div class="mcp-card-tags">${m.tools.map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t.name)}</span>`).join('')}</div>` : ''}
+      ${connected && m.tools && m.tools.length ? CC.ui.tagRow(m.tools.map((t) => CC.ui.badge(t.name, { tone: 'dim', size: 'sm' })).join(''), { className: 'mcp-card-tags' }) : ''}
     </div>`;
   },
 
@@ -724,7 +720,7 @@ CC.views.settings = {
             }).join('')}
           </select>
         </div>
-        <span class="badge ${connectedCount > 0 ? 'ok' : 'dim'}">${connectedCount}/${mcpCount} connected</span>
+        ${CC.ui.badge(`${connectedCount}/${mcpCount} connected`, { tone: connectedCount > 0 ? 'ok' : 'dim' })}
         <div class="mcp-chat-selector">
           <div class="mcp-chat-meta-item" id="mcp-chat-model-label">
             <span class="mcp-chat-meta-label">Model</span>
@@ -737,7 +733,7 @@ CC.views.settings = {
             }).join('')}
           </select>
         </div>
-        <span class="badge ${modelWorkingCount > 0 ? 'ok' : 'dim'}">${modelWorkingCount}/${modelCount} working</span>
+        ${CC.ui.badge(`${modelWorkingCount}/${modelCount} working`, { tone: modelWorkingCount > 0 ? 'ok' : 'dim' })}
         ${history.length > 0 ? '<button class="mcp-chat-clear" id="mcp-chat-clear">Clear chat</button>' : ''}
       </div>
     </div>`;
@@ -750,7 +746,7 @@ CC.views.settings = {
     if (msg.role === 'system') {
       return `<div class="mcp-chat-system">${CC.escapeHtml(msg.content)}</div>`;
     }
-    const toolBadge = msg.tool ? `<div class="mcp-chat-tool"><span class="badge accent">${CC.escapeHtml(msg.tool)}</span></div>` : '';
+    const toolBadge = msg.tool ? `<div class="mcp-chat-tool">${CC.ui.badge(msg.tool, { tone: 'accent' })}</div>` : '';
     return `<div class="mcp-chat-assistant">${toolBadge}<div class="mcp-chat-assistant-text">${CC.escapeHtml(msg.content)}</div></div>`;
   },
 
@@ -1016,10 +1012,10 @@ CC.views.settings = {
     const analyzedCount = articles.filter((a) => a.analysis).length;
 
     return `<div class="mcp-section">
-      <div class="existing-import-row">
-        <button class="btn-primary btn-sm" id="existing-sync-mcp">Update with MCP</button>
+      <div class="ui-actions existing-import-row">
+        ${CC.ui.button('Update with MCP', { id: 'existing-sync-mcp' })}
       </div>
-      <div class="existing-controls">
+      <div class="ui-toolbar existing-controls">
         <select id="existing-tag-filter" class="existing-select">
           <option value="">All tags (${articles.length})</option>
           ${allTags.map((t) => `<option value="${CC.escapeHtml(t)}" ${t === this.existingTagFilter ? 'selected' : ''}>${CC.escapeHtml(t)}</option>`).join('')}
@@ -1044,18 +1040,18 @@ CC.views.settings = {
       ? new Date(a.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
       : '';
     const summary = (a.analysis || a.description || a.excerpt || '').trim();
-    const tagBadges = (a.tags || []).map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t)}</span>`).join('');
+    const tagBadges = (a.tags || []).map((t) => CC.ui.badge(t, { tone: 'dim', size: 'sm' })).join('');
     const hasAnalytics = !!a.analytics;
     const hasUrl = !!a.publicUrl;
-    const tags = `${tagBadges}${hasAnalytics ? '<span class="badge ok" style="font-size:10.5px">Analytics</span>' : ''}`;
+    const tags = `${tagBadges}${hasAnalytics ? CC.ui.badge('Analytics', { tone: 'ok', size: 'sm' }) : ''}`;
 
-    return `<div class="mcp-card">
-      <div class="mcp-card-top">
-        <div class="mcp-card-name">${CC.escapeHtml(a.title)}</div>
-        <div class="mcp-card-actions">
-          ${hasAnalytics ? `<button class="btn-ghost btn-sm" data-existing-details="${a.id}">Details</button>` : ''}
-          <button class="btn-primary btn-sm" data-existing-view="${a.id}">View</button>
-          <button class="btn-danger btn-sm" data-existing-remove="${a.id}">Remove</button>
+    return `<div class="ui-card mcp-card">
+      <div class="ui-card-header mcp-card-top">
+        <div class="ui-card-title mcp-card-name">${CC.escapeHtml(a.title)}</div>
+        <div class="ui-actions ui-card-actions mcp-card-actions">
+          ${hasAnalytics ? CC.ui.button('Details', { variant: 'ghost', data: { 'existing-details': a.id } }) : ''}
+          ${CC.ui.button('View', { data: { 'existing-view': a.id } })}
+          ${CC.ui.button('Remove', { variant: 'danger', data: { 'existing-remove': a.id } })}
         </div>
       </div>
       ${dateStr ? `<div class="existing-date">${dateStr}</div>` : ''}
@@ -1063,7 +1059,7 @@ CC.views.settings = {
         ${hasUrl ? `<a href="${CC.escapeHtml(a.publicUrl)}" target="_blank" class="existing-url">${CC.escapeHtml(a.publicUrl)}</a>` : '<span class="existing-no-url">No URL (run Fetch URLs in Utilities)</span>'}
       </div>
       ${summary ? `<div class="existing-summary">${CC.escapeHtml(summary)}</div>` : ''}
-      ${tags ? `<div class="mcp-card-tags existing-tags-row">${tags}</div>` : ''}
+      ${tags ? CC.ui.tagRow(tags, { className: 'mcp-card-tags existing-tags-row' }) : ''}
       ${this.selectedExistingDetail === a.id && hasAnalytics ? this.renderAnalyticsPanel(a) : ''}
     </div>`;
   },
@@ -1079,14 +1075,14 @@ CC.views.settings = {
     const hasLast30d = !!an.last30d;
     const statusClass = an.status === 'complete' ? 'ok' : an.status === 'failed' ? 'warn' : 'accent';
     const statusLabel = an.status ? an.status[0].toUpperCase() + an.status.slice(1) : '';
-    const emptyRow = (text) => `<div class="analytics-empty">${CC.escapeHtml(text)}</div>`;
+    const emptyRow = (text) => `<div class="ui-inline-empty analytics-empty">${CC.escapeHtml(text)}</div>`;
 
     return `<div class="analytics-panel">
       <div class="analytics-panel-header">
         <span class="analytics-panel-title">Analytics</span>
         <div class="analytics-panel-meta">
-          ${statusLabel ? `<span class="badge ${statusClass}" style="font-size:10.5px">${statusLabel}</span>` : ''}
-          <button class="btn-ghost btn-sm" data-existing-details-close>Close</button>
+          ${statusLabel ? CC.ui.badge(statusLabel, { tone: statusClass, size: 'sm' }) : ''}
+          ${CC.ui.button('Close', { variant: 'ghost', data: { 'existing-details-close': true } })}
         </div>
       </div>
       <div class="analytics-grid">
@@ -1241,20 +1237,20 @@ CC.views.settings = {
       'structural-patterns': 'Structural Patterns'
     };
 
-    let html = `<div class="toolbar">
-      <button class="btn-primary btn-sm" id="aa-add">+ Add Rule</button>
-      <span class="badge dim">${rules.filter(r => r.active).length} active / ${rules.length} total</span>
+    let html = `<div class="ui-toolbar toolbar">
+      ${CC.ui.button('+ Add Rule', { id: 'aa-add' })}
+      ${CC.ui.badge(`${rules.filter(r => r.active).length} active / ${rules.length} total`, { tone: 'dim' })}
     </div>`;
 
     for (const [cat, items] of Object.entries(cats)) {
-      html += `<h3 style="font-size:13px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-2)">${catLabels[cat] || cat}</h3>`;
+      html += CC.ui.sectionTitle(catLabels[cat] || cat);
       for (const r of items) {
-        html += `<div class="list-item" style="${r.active ? '' : 'opacity:0.5'}">
+        html += `<div class="ui-list-item list-item ${r.active ? '' : 'is-muted'}">
           <div class="list-item-info">
-            <div class="list-item-title" style="font-size:13.5px">${CC.escapeHtml(r.rule)}</div>
-            <div class="list-item-sub">${CC.escapeHtml(r.description || '')} ${r.custom ? '<span class="badge dim">custom</span>' : ''}</div>
+            <div class="list-item-title">${CC.escapeHtml(r.rule)}</div>
+            <div class="list-item-sub">${CC.escapeHtml(r.description || '')} ${r.custom ? CC.ui.badge('custom', { tone: 'dim', size: 'sm' }) : ''}</div>
           </div>
-          <div class="list-item-actions">
+          <div class="ui-actions list-item-actions">
             <label class="toggle">
               <input type="checkbox" data-aa-toggle="${r.id}" ${r.active ? 'checked' : ''} />
               <span class="slider"></span>
@@ -1310,8 +1306,8 @@ CC.views.settings = {
     ];
 
     return `<div class="util-section">
-      <div class="util-card" data-util="export">
-        <div class="util-card-title">Export Data</div>
+      <div class="ui-card util-card" data-util="export">
+        <div class="ui-card-title util-card-title">Export Data</div>
         <p class="util-desc">Select what to export. You'll get a single JSON file you can import on another machine to clone this setup.</p>
         <div class="util-checkboxes">
           <label class="util-check-all">
@@ -1328,46 +1324,46 @@ CC.views.settings = {
             </label>
           `).join('')}
         </div>
-        <button class="btn-primary btn-sm" id="util-export-btn">Export Selected</button>
+        ${CC.ui.button('Export Selected', { id: 'util-export-btn' })}
       </div>
 
-      <div class="util-card" data-util="enrich">
-        <div class="util-card-title">Content Data Enrichment</div>
+      <div class="ui-card util-card" data-util="enrich">
+        <div class="ui-card-title util-card-title">Content Data Enrichment</div>
         <p class="util-desc">One-time setup and rarely-used tools. Run these to build and enrich your content library. Daily operations like "Update with MCP" live in the Existing Content tab.</p>
         <div class="util-action-row">
           <div class="util-action">
             <span class="util-action-label">Import Articles</span>
             <span class="util-action-desc">Select markdown/text files from your local drive to build the content library.</span>
-            <button class="btn-primary btn-sm" id="util-import-articles">Import Articles</button>
+            ${CC.ui.button('Import Articles', { id: 'util-import-articles' })}
           </div>
           <div class="util-action">
             <span class="util-action-label">Fetch Article URLs from CMS</span>
             <span class="util-action-desc">Gets the public URL (slug) for each AI-tagged article from Payload. Run this before analytics.</span>
-            <button class="btn-primary btn-sm" id="util-fetch-urls">Fetch URLs</button>
+            ${CC.ui.button('Fetch URLs', { id: 'util-fetch-urls' })}
           </div>
           <div class="util-action">
             <span class="util-action-label">Enrich with Analytics</span>
             <span class="util-action-desc">Pulls GA4 + GSC data per article (traffic, countries, sources, top queries). Requires URLs to be set first.</span>
-            <button class="btn-primary btn-sm" id="util-enrich-analytics">Enrich Analytics</button>
+            ${CC.ui.button('Enrich Analytics', { id: 'util-enrich-analytics' })}
           </div>
           <div class="util-action">
             <span class="util-action-label">Generate Summaries</span>
             <span class="util-action-desc">Runs all articles through the default model to create 2-3 sentence analysis summaries. Used by topic intelligence for deduplication.</span>
-            <button class="btn-primary btn-sm" id="util-generate-summaries">Generate Summaries</button>
+            ${CC.ui.button('Generate Summaries', { id: 'util-generate-summaries' })}
           </div>
         </div>
         <div id="util-enrich-status" class="util-enrich-status"></div>
       </div>
 
-      <div class="util-card" data-util="import">
-        <div class="util-card-title">Import Data</div>
+      <div class="ui-card util-card" data-util="import">
+        <div class="ui-card-title util-card-title">Import Data</div>
         <p class="util-desc">Select a previously exported JSON file. This will overwrite existing data for every section found in the file.</p>
-        <button class="btn-primary btn-sm" id="util-import-btn">Choose File &amp; Import</button>
+        ${CC.ui.button('Choose File & Import', { id: 'util-import-btn' })}
         <div id="util-import-result" class="util-import-result"></div>
       </div>
 
-      <div class="util-card util-warning">
-        <div class="util-card-title">What's NOT exported</div>
+      <div class="ui-card util-card util-warning">
+        <div class="ui-card-title util-card-title">What's NOT exported</div>
         <ul class="util-notes">
           <li>Installed CLI tools (ContentStudio, Claude Code) - install these manually on the new machine</li>
           <li>MCP <em>connection state</em> - you'll need to click Connect again after import (OAuth tokens may be expired)</li>
@@ -1445,7 +1441,7 @@ CC.views.settings = {
         if (result.started) {
           const statusDiv = document.getElementById('util-enrich-status');
           if (statusDiv) {
-            statusDiv.innerHTML = `<div class="badge accent" style="margin-top:10px">Generating summaries for ${result.count} articles...</div>`;
+            statusDiv.innerHTML = CC.ui.badge(`Generating summaries for ${result.count} articles...`, { tone: 'accent', className: 'util-status-badge' });
           }
           btn.textContent = 'Summarizing...';
         } else {
@@ -1493,7 +1489,7 @@ CC.views.settings = {
       try {
         const result = await CC.api.existing.enrichAnalytics();
         if (result.started) {
-          statusDiv.innerHTML = `<div class="badge accent" style="margin-top:10px">Enriching ${result.count} articles in background...</div>`;
+          statusDiv.innerHTML = CC.ui.badge(`Enriching ${result.count} articles in background...`, { tone: 'accent', className: 'util-status-badge' });
         } else {
           CC.setStickyStatus(false);
           CC.showStatus(`All articles already enriched (${result.skipped})`);
@@ -1513,7 +1509,7 @@ CC.views.settings = {
     window._analyticsProgressHandler = CC.api.onAnalyticsProgress((data) => {
       const statusDiv = document.getElementById('util-enrich-status');
       if (statusDiv) {
-        statusDiv.innerHTML = `<div class="badge accent" style="margin-top:10px">Enriching ${data.done}/${data.total}...</div>`;
+        statusDiv.innerHTML = CC.ui.badge(`Enriching ${data.done}/${data.total}...`, { tone: 'accent', className: 'util-status-badge' });
       }
       CC.showStatus(`Enriching ${data.done}/${data.total}...`);
     });
@@ -1523,7 +1519,7 @@ CC.views.settings = {
       CC.setStickyStatus(false);
       const statusDiv = document.getElementById('util-enrich-status');
       if (statusDiv) {
-        statusDiv.innerHTML = `<div class="badge ok" style="margin-top:10px">Done: ${data.done}/${data.total} articles enriched</div>`;
+        statusDiv.innerHTML = CC.ui.badge(`Done: ${data.done}/${data.total} articles enriched`, { tone: 'ok', className: 'util-status-badge' });
       }
       CC.showStatus(`Analytics complete: ${data.done}/${data.total}`);
       const btn = document.getElementById('util-enrich-analytics');
@@ -1545,13 +1541,13 @@ CC.views.settings = {
           btn.textContent = 'Choose File & Import';
           return;
         }
-        resultDiv.innerHTML = `<div class="badge ok" style="margin-top:10px">Imported: ${result.imported.map(CC.escapeHtml).join(', ')}</div>`;
+        resultDiv.innerHTML = CC.ui.badge(`Imported: ${result.imported.join(', ')}`, { tone: 'ok', className: 'util-status-badge' });
         CC.showStatus('Import complete. Refreshing...');
         // Reload all state at once
         await CC.refresh();
         CC.navigate('settings');
       } catch (e) {
-        resultDiv.innerHTML = `<div class="badge" style="color:var(--danger);margin-top:10px">Failed: ${CC.escapeHtml(e.message)}</div>`;
+        resultDiv.innerHTML = CC.ui.badge(`Failed: ${e.message}`, { tone: 'danger', className: 'util-status-badge' });
         CC.showStatus('Import failed: ' + e.message);
         btn.disabled = false;
         btn.textContent = 'Choose File & Import';
