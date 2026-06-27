@@ -81,6 +81,7 @@ CC.views.drafts = {
     const models = CC.state.models || [];
     const audiences = CC.state.audiences || [];
     const topics = CC.state.topics || [];
+    const research = CC.state.research || [];
     const defaultModelId = CC.state.settings?.defaultModelId;
     const voice = CC.state.voiceProfiles?.find((v) => v.isDefault) || CC.state.voiceProfiles?.[0];
     const activeFws = (CC.state.frameworks || []).filter((f) => f.active);
@@ -114,6 +115,13 @@ CC.views.drafts = {
         <select id="nd-topic">
           <option value="">None</option>
           ${topics.map((t) => `<option value="${t.id}">${CC.escapeHtml(t.title)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Link to Research (optional)</label>
+        <select id="nd-research">
+          <option value="">None</option>
+          ${research.map((r) => `<option value="${r.id}">${CC.escapeHtml(r.title || r.subject)}</option>`).join('')}
         </select>
       </div>
       ${CC.ui.formActions(`
@@ -258,6 +266,10 @@ CC.views.drafts = {
         await CC.api.topics.update(draft.topicId, { status: 'completed' });
         await CC.refresh('topics');
       }
+      if (draft.researchId) {
+        await CC.api.research.update(draft.researchId, { status: 'completed' });
+        await CC.refresh('research');
+      }
       // Generate model-driven summary only if not already present (idempotent)
       if (!draft.summary) {
         CC.showStatus('Generating article summary...');
@@ -298,6 +310,7 @@ CC.views.drafts = {
       const modelId = document.getElementById('nd-model').value;
       const segmentId = document.getElementById('nd-audience').value;
       const topicId = document.getElementById('nd-topic').value || undefined;
+      const researchId = document.getElementById('nd-research').value || undefined;
       const voice = CC.state.voiceProfiles?.find((v) => v.isDefault) || CC.state.voiceProfiles?.[0];
       const activeFws = (CC.state.frameworks || []).filter((f) => f.active);
 
@@ -311,6 +324,8 @@ CC.views.drafts = {
         modelId,
         segmentId,
         topicId,
+        researchId,
+        sourceType: researchId ? 'research' : topicId ? 'topic' : 'manual',
         frameworkIds: activeFws.map((f) => f.id),
         voiceProfileId: voice?.id || '',
         conversation,
@@ -320,6 +335,10 @@ CC.views.drafts = {
       if (topicId) {
         await CC.api.topics.update(topicId, { status: 'drafting' });
         await CC.refresh('topics');
+      }
+      if (researchId) {
+        await CC.api.research.update(researchId, { status: 'drafting' });
+        await CC.refresh('research');
       }
 
       self.showNewForm = false;

@@ -19,6 +19,18 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('topics:failed', handler);
   },
 
+  onResearchAnalyzed: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on('research:analyzed', handler);
+    return () => ipcRenderer.removeListener('research:analyzed', handler);
+  },
+
+  onResearchFailed: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on('research:failed', handler);
+    return () => ipcRenderer.removeListener('research:failed', handler);
+  },
+
   onAnalyzed: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on('existing:analyzed', handler);
@@ -127,6 +139,14 @@ contextBridge.exposeInMainWorld('api', {
     update: (id, patch) => ipcRenderer.invoke('topics:update', id, patch),
     remove: (id) => ipcRenderer.invoke('topics:remove', id),
     generate: (modelId) => ipcRenderer.invoke('topics:generate', modelId)
+  },
+
+  // Research
+  research: {
+    list: () => ipcRenderer.invoke('research:list'),
+    importPdfs: (modelId) => ipcRenderer.invoke('research:importPdfs', modelId),
+    update: (id, patch) => ipcRenderer.invoke('research:update', id, patch),
+    remove: (id) => ipcRenderer.invoke('research:remove', id)
   },
 
   // Drafts

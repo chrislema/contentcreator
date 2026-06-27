@@ -10,6 +10,7 @@ window.CC = {
     voiceProfiles: [],
     platformProfiles: [],
     audiences: [],
+    research: [],
     topics: [],
     drafts: [],
     distributions: []
@@ -65,7 +66,7 @@ window.CC = {
   },
 
   async loadAll() {
-    const [settings, models, frameworks, mcps, antiAi, voiceProfiles, platformProfiles, audiences, topics, drafts, distributions, existing] = await Promise.all([
+    const [settings, models, frameworks, mcps, antiAi, voiceProfiles, platformProfiles, audiences, research, topics, drafts, distributions, existing] = await Promise.all([
       this.api.settings.get(),
       this.api.models.list(),
       this.api.frameworks.list(),
@@ -74,6 +75,7 @@ window.CC = {
       this.api.voiceProfiles.list(),
       this.api.platformProfiles.list(),
       this.api.audiences.list(),
+      this.api.research.list(),
       this.api.topics.list(),
       this.api.drafts.list(),
       this.api.distributions.list(),
@@ -87,6 +89,7 @@ window.CC = {
     this.state.voiceProfiles = voiceProfiles;
     this.state.platformProfiles = platformProfiles;
     this.state.audiences = audiences;
+    this.state.research = research;
     this.state.topics = topics;
     this.state.drafts = drafts;
     this.state.distributions = distributions;
@@ -102,6 +105,7 @@ window.CC = {
     if (key === 'voiceProfiles' || !key) this.state.voiceProfiles = await this.api.voiceProfiles.list();
     if (key === 'platformProfiles' || !key) this.state.platformProfiles = await this.api.platformProfiles.list();
     if (key === 'audiences' || !key) this.state.audiences = await this.api.audiences.list();
+    if (key === 'research' || !key) this.state.research = await this.api.research.list();
     if (key === 'topics' || !key) this.state.topics = await this.api.topics.list();
     if (key === 'drafts' || !key) this.state.drafts = await this.api.drafts.list();
     if (key === 'distributions' || !key) this.state.distributions = await this.api.distributions.list();

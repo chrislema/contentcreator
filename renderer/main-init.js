@@ -44,6 +44,30 @@
     if (btn) { btn.disabled = false; btn.textContent = 'Generate Topics'; }
   });
 
+  CC.api.onResearchAnalyzed((data) => {
+    CC.setStickyStatus(false);
+    CC.showStatus(`Research card ready: ${data.title || 'analysis complete'}`);
+    const btn = document.getElementById('research-import');
+    if (btn) { btn.disabled = false; btn.textContent = 'Import PDFs'; }
+    CC.refresh('research').then(() => {
+      if (CC.state.currentView === 'research') {
+        CC.navigate('research');
+      }
+    });
+  });
+
+  CC.api.onResearchFailed((data) => {
+    CC.setStickyStatus(false);
+    CC.showStatus('Research failed: ' + (data.error || 'unknown error'));
+    const btn = document.getElementById('research-import');
+    if (btn) { btn.disabled = false; btn.textContent = 'Import PDFs'; }
+    CC.refresh('research').then(() => {
+      if (CC.state.currentView === 'research') {
+        CC.navigate('research');
+      }
+    });
+  });
+
   // Article analysis completion listener
   CC.api.onAnalyzed((data) => {
     CC.setStickyStatus(false);

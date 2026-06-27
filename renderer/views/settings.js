@@ -1297,6 +1297,7 @@ CC.views.settings = {
       { id: 'voiceProfiles', label: 'Voice Profiles', desc: 'Voice identity, tone, and style settings' },
       { id: 'platformProfiles', label: 'Platform Profiles', desc: 'Platform-specific posting rules' },
       { id: 'audiences', label: 'Audiences', desc: 'Micro-segments, goal pyramids, pain pyramids' },
+      { id: 'research', label: 'Research', desc: 'Research-backed insight cards from uploaded PDFs' },
       { id: 'topics', label: 'Topics', desc: 'Ranked content ideas and intelligence data' },
       { id: 'drafts', label: 'Drafts', desc: 'Article drafts, conversations, summaries' },
       { id: 'distributions', label: 'Distributions', desc: 'Generated platform posts' },

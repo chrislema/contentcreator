@@ -9,12 +9,13 @@ const { buildDraftSystemPrompt, chatCompletion } = require('./lib/modelClient');
 const { connectMcp, queryMcp, callTool } = require('./lib/mcpClient');
 const { runOAuthFlow, refreshToken } = require('./lib/mcpOAuth');
 const { gatherAll, buildTopicPrompt } = require('./lib/topicIntelligence');
+const { buildResearchPrompt, parseResearchResponse } = require('./lib/researchIntelligence');
 
 let win;
 
 // Stores (initialized in createWindow)
 let settingsStore, frameworksStore, antiAiStore, voiceProfilesStore, platformProfilesStore;
-let audiencesStore, topicsStore, draftsStore, distributionsStore, existingContentStore;
+let audiencesStore, researchStore, topicsStore, draftsStore, distributionsStore, existingContentStore;
 
 function status(text) {
   if (win && !win.isDestroyed()) win.webContents.send('app:status', text);
@@ -305,6 +306,7 @@ function createWindow() {
   voiceProfilesStore = createCollection(path.join(dir, 'voiceProfiles.json'));
   platformProfilesStore = createCollection(path.join(dir, 'platformProfiles.json'));
   audiencesStore = createCollection(path.join(dir, 'audiences.json'));
+  researchStore = createCollection(path.join(dir, 'research.json'));
   topicsStore = createCollection(path.join(dir, 'topics.json'));
   draftsStore = createCollection(path.join(dir, 'drafts.json'));
   distributionsStore = createCollection(path.join(dir, 'distributions.json'));
@@ -1174,6 +1176,346 @@ async function generateTopicsInBackground(model, settings) {
   }
 }
 
+// ── IPC: Research ─────────────────────────────────────────────────
+ipcMain.handle('research:list', () => researchStore.list());
+ipcMain.handle('research:update', (_e, id, patch) => {
+  const existing = researchStore.get(id);
+  if (!existing) throw new Error('Research item not found');
+  const merged = { ...existing, ...patch, id, updatedAt: new Date().toISOString() };
+  researchStore.add(merged);
+  return merged;
+});
+ipcMain.handle('research:remove', (_e, id) => {
+  researchStore.remove(id);
+  status('Research item removed');
+  return researchStore.list();
+});
+
+ipcMain.handle('research:importPdfs', async (_e, modelId) => {
+  ensureNoBackgroundJob('research:analyze', 'Research analysis');
+
+  const s = settingsStore.get();
+  const models = s.models || [];
+  const model = models.find((m) => m.id === modelId) || models.find((m) => m.id === s.defaultModelId) || models[0];
+  if (!model) throw new Error('Set a default model in Settings first.');
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Import Research PDFs',
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    properties: ['openFile', 'multiSelections']
+  });
+  if (canceled || !filePaths || filePaths.length === 0) return { canceled: true };
+  ensureNoBackgroundJob('research:analyze', 'Research analysis');
+
+  const now = new Date().toISOString();
+  const records = filePaths.map((filePath) => {
+    const fileName = path.basename(filePath);
+    const title = fileName.replace(/\.pdf$/i, '');
+    const record = {
+      id: makeId(),
+      title,
+      subject: title,
+      status: 'analyzing',
+      modelId: model.id,
+      sources: [{ fileName, status: 'pending' }],
+      createdAt: now,
+      updatedAt: now
+    };
+    researchStore.add(record);
+    return { record, filePath };
+  });
+
+  const job = startBackgroundJob(
+    'research:analyze',
+    'Research analysis',
+    () => analyzeResearchBatchInBackground(records, model, s)
+  );
+
+  status(`Analyzing ${records.length} research PDF${records.length === 1 ? '' : 's'} as separate cards...`);
+  return { started: true, jobId: job.id, record: records[0]?.record, records: records.map((item) => item.record) };
+});
+
+async function extractPdfText(filePath) {
+  const { PDFParse } = require('pdf-parse');
+  const parser = new PDFParse({ data: fs.readFileSync(filePath) });
+  try {
+    const result = await parser.getText({ pageJoiner: '\n\n' });
+    const text = String(result.text || '').trim();
+    return {
+      fileName: path.basename(filePath),
+      pageCount: result.total || result.pages?.length || 0,
+      charCount: text.length,
+      firstPageText: String(result.pages?.[0]?.text || '').trim(),
+      text
+    };
+  } finally {
+    await parser.destroy();
+  }
+}
+
+function matchAudienceByName(target) {
+  const audiences = audiencesStore.list();
+  const normalized = String(target || '').toLowerCase().trim();
+  return audiences.find((a) => a.name === target)
+    || audiences.find((a) => a.name && a.name.toLowerCase().trim() === normalized)
+    || audiences.find((a) => normalized && a.name && a.name.toLowerCase().includes(normalized))
+    || null;
+}
+
+function normalizeScore(value) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(10, n));
+}
+
+function cleanCitationValue(value) {
+  if (Array.isArray(value)) return value.map(cleanCitationValue).filter(Boolean).join(', ');
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+function normalizeCitationAuthors(value) {
+  if (Array.isArray(value)) return value.map(cleanCitationValue).filter(Boolean).slice(0, 20);
+  const text = cleanCitationValue(value);
+  if (!text) return [];
+  return text
+    .split(/\s*(?:;|\band\b|&)\s*/i)
+    .map(cleanCitationValue)
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function normalizeCitation(rawCitation, sourceNames, index) {
+  const citation = typeof rawCitation === 'string' ? { rawCitation } : (rawCitation || {});
+  const articleTitle = cleanCitationValue(
+    citation.articleTitle || citation.journalArticleTitle || citation.paperTitle || citation.title
+  );
+  const authors = normalizeCitationAuthors(citation.authors || citation.author);
+  const journal = cleanCitationValue(citation.journal || citation.publication || citation.journalName);
+  const publicationDate = cleanCitationValue(
+    citation.publicationDate || citation.publishedDate || citation.published || citation.date
+  );
+  const year = cleanCitationValue(citation.year || (publicationDate.match(/\b(19|20)\d{2}\b/) || [])[0]);
+  const doi = cleanCitationValue(citation.doi || citation.DOI).replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '');
+  const rawCitationText = cleanCitationValue(citation.rawCitation || citation.citation || citation.reference);
+
+  const normalized = {
+    sourceFile: cleanCitationValue(citation.sourceFile || citation.fileName || citation.pdf || sourceNames[index] || ''),
+    articleTitle,
+    authors,
+    journal,
+    publicationDate,
+    year,
+    volume: cleanCitationValue(citation.volume),
+    issue: cleanCitationValue(citation.issue || citation.number),
+    pages: cleanCitationValue(citation.pages || citation.pageRange),
+    articleNumber: cleanCitationValue(citation.articleNumber || citation.articleNo || citation.article),
+    doi,
+    url: cleanCitationValue(citation.url || citation.sourceUrl),
+    rawCitation: rawCitationText
+  };
+
+  const hasCitationData = normalized.articleTitle
+    || normalized.authors.length
+    || normalized.journal
+    || normalized.publicationDate
+    || normalized.year
+    || normalized.doi
+    || normalized.rawCitation;
+  return hasCitationData ? normalized : null;
+}
+
+function normalizeResearchCitations(raw, record) {
+  const sourceNames = (record.sources || []).map((source) => source.fileName).filter(Boolean);
+  const candidates = Array.isArray(raw.citations)
+    ? raw.citations
+    : raw.citations ? [raw.citations]
+      : raw.citation ? [raw.citation] : [];
+  return candidates
+    .map((citation, index) => normalizeCitation(citation, sourceNames, index))
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function normalizeResearchAnalysis(raw, record, contextSources) {
+  const scores = raw.scores || {};
+  const normalizedScores = {
+    searchDemand: normalizeScore(scores.searchDemand),
+    performancePotential: normalizeScore(scores.performancePotential),
+    contentGap: normalizeScore(scores.contentGap),
+    audienceFit: normalizeScore(scores.audienceFit),
+    uniqueness: normalizeScore(scores.uniqueness)
+  };
+  normalizedScores.total = Math.max(
+    0,
+    Math.min(
+      50,
+      parseInt(scores.total, 10)
+        || Object.values(normalizedScores).reduce((sum, score) => sum + score, 0)
+    )
+  );
+
+  const matchedAudience = matchAudienceByName(raw.target || raw.targetAudience || raw.audience);
+  const target = matchedAudience?.name || raw.target || raw.targetAudience || raw.audience || '';
+
+  return {
+    ...record,
+    title: raw.title || raw.subject || record.title,
+    subject: raw.subject || raw.title || record.subject || record.title,
+    angle: raw.angle || '',
+    concept: raw.concept || '',
+    aha: raw.aha || '',
+    finding: raw.finding || '',
+    whyItMatters: raw.whyItMatters || '',
+    evidence: Array.isArray(raw.evidence) ? raw.evidence.slice(0, 6) : [],
+    caveats: Array.isArray(raw.caveats) ? raw.caveats.slice(0, 4) : [],
+    citations: normalizeResearchCitations(raw, record),
+    target,
+    targetAudience: matchedAudience?.id || '',
+    cmsTags: Array.isArray(raw.cmsTags) ? raw.cmsTags.slice(0, 8) : [],
+    priority: Math.max(1, Math.min(5, parseInt(raw.priority, 10) || Math.ceil(normalizedScores.total / 10) || 3)),
+    scores: normalizedScores,
+    rationale: raw.rationale || '',
+    contextSources: contextSources.used || [],
+    status: 'idea',
+    analyzedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+async function analyzeResearchBatchInBackground(items, model, settings) {
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const fileName = path.basename(item.filePath);
+    status(`Analyzing research PDF ${index + 1}/${items.length}: ${fileName}`);
+    await analyzeResearchInBackground(item.record.id, [item.filePath], model, settings);
+  }
+  status(`Research import complete: ${items.length} card${items.length === 1 ? '' : 's'} processed`);
+}
+
+async function analyzeResearchInBackground(recordId, filePaths, model, settings) {
+  let record = researchStore.get(recordId);
+  const sourceStatus = [];
+  const docs = [];
+
+  try {
+    for (const filePath of filePaths) {
+      const fileName = path.basename(filePath);
+      status(`Reading PDF: ${fileName}`);
+      try {
+        const doc = await extractPdfText(filePath);
+        docs.push(doc);
+        sourceStatus.push({
+          fileName,
+          status: doc.text ? 'extracted' : 'empty',
+          pageCount: doc.pageCount,
+          charCount: doc.charCount
+        });
+      } catch (e) {
+        logError(`research:extract:${fileName}`, e);
+        sourceStatus.push({ fileName, status: 'failed', error: e.message });
+      }
+
+      record = researchStore.get(recordId) || record;
+      researchStore.add({ ...record, sources: sourceStatus, updatedAt: new Date().toISOString() });
+    }
+
+    const usableDocs = docs.filter((doc) => doc.text && doc.text.length > 100);
+    if (usableDocs.length === 0) throw new Error('No readable text found in the selected PDFs.');
+
+    status('Scoring research against audiences and search data...');
+    const { context, sources } = await gatherAll(
+      { existing: existingContentStore, audiences: audiencesStore },
+      { mcps: settings.mcps || [] }
+    );
+    const { sysPrompt, userPrompt } = buildResearchPrompt(usableDocs, context, sources);
+    const response = await chatCompletion(model, [
+      { role: 'system', content: sysPrompt },
+      { role: 'user', content: userPrompt }
+    ], 8192, { modelId: model.id, noTools: true });
+
+    let parsed;
+    try {
+      parsed = parseResearchResponse(response);
+    } catch {
+      logError('research:analyze:parse', new Error(`Parse failed. Raw response (first 500): ${response.slice(0, 500)}`));
+      throw new Error('Model returned unparseable research analysis');
+    }
+
+    record = researchStore.get(recordId) || record;
+    const analyzed = normalizeResearchAnalysis(parsed, { ...record, sources: sourceStatus }, sources);
+    researchStore.add(analyzed);
+    status(`Research card ready: ${analyzed.title}`);
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('research:analyzed', { id: recordId, title: analyzed.title });
+    }
+  } catch (e) {
+    logError('research:analyze', e);
+    record = researchStore.get(recordId) || record;
+    researchStore.add({
+      ...record,
+      sources: sourceStatus.length ? sourceStatus : record.sources,
+      status: 'failed',
+      lastError: e.message,
+      updatedAt: new Date().toISOString()
+    });
+    status('Research analysis failed: ' + e.message);
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('research:failed', { id: recordId, error: e.message });
+    }
+  }
+}
+
+function formatResearchCitationForDraft(citation) {
+  if (!citation) return '';
+  const authors = Array.isArray(citation.authors)
+    ? citation.authors.filter(Boolean).join(', ')
+    : cleanCitationValue(citation.authors);
+  const title = cleanCitationValue(citation.articleTitle || citation.title);
+  const volumeIssue = [
+    citation.volume ? `Vol. ${citation.volume}` : '',
+    citation.issue ? `No. ${citation.issue}` : '',
+    citation.articleNumber ? citation.articleNumber : ''
+  ].filter(Boolean).join(', ');
+  const publication = [
+    cleanCitationValue(citation.journal),
+    volumeIssue,
+    cleanCitationValue(citation.pages),
+    cleanCitationValue(citation.publicationDate || citation.year)
+  ].filter(Boolean).join(', ');
+  const doi = cleanCitationValue(citation.doi);
+  const sourceFile = cleanCitationValue(citation.sourceFile);
+  const raw = cleanCitationValue(citation.rawCitation);
+  return [
+    `- Source PDF: ${sourceFile || 'unknown'}`,
+    authors ? `Authors: ${authors}` : '',
+    title ? `Article title: ${title}` : '',
+    publication ? `Publication: ${publication}` : '',
+    doi ? `DOI: ${doi}` : '',
+    raw ? `PDF citation text: ${raw}` : ''
+  ].filter(Boolean).join('\n  ');
+}
+
+function buildResearchDraftContext(research) {
+  const sources = (research.sources || []).map((source) => source.fileName).filter(Boolean).join(', ');
+  const evidence = (research.evidence || []).map((item) => `- ${item}`).join('\n');
+  const caveats = (research.caveats || []).map((item) => `- ${item}`).join('\n');
+  const citations = (research.citations || []).map(formatResearchCitationForDraft).filter(Boolean).join('\n');
+  return [
+    `Research subject: ${research.subject || research.title}`,
+    `Target: ${research.target || ''}`,
+    `Angle: ${research.angle || ''}`,
+    `Core concept: ${research.concept || ''}`,
+    `Aha: ${research.aha || ''}`,
+    `Finding: ${research.finding || ''}`,
+    `Why it matters: ${research.whyItMatters || ''}`,
+    sources ? `Source papers: ${sources}` : '',
+    citations ? `Citation metadata from the PDFs. Use these details when attributing or citing the research:\n${citations}` : '',
+    evidence ? `Evidence:\n${evidence}` : '',
+    caveats ? `Caveats and limits:\n${caveats}` : ''
+  ].filter(Boolean).join('\n');
+}
+
 // ── IPC: Drafts ──────────────────────────────────────────────────
 ipcMain.handle('drafts:list', () => draftsStore.list());
 ipcMain.handle('drafts:get', (_e, id) => draftsStore.get(id));
@@ -1601,9 +1943,12 @@ ipcMain.handle('drafts:generate', async (_e, draftId, userMessage) => {
   const voice = voiceProfilesStore.list().find((v) => v.id === draft.voiceProfileId) || voiceProfilesStore.list().find((v) => v.isDefault);
   const antiAi = antiAiStore.list();
 
-  // Build messages
-  const topic = topicsStore.get(draft.topicId);
-  const topicContext = topic ? `Topic: ${topic.title}\nAngle: ${topic.angle}\nTarget: ${topic.target}` : `Title: ${draft.title}`;
+  // Build source context
+  const research = draft.researchId ? researchStore.get(draft.researchId) : null;
+  const topic = draft.topicId ? topicsStore.get(draft.topicId) : null;
+  const sourceContext = research
+    ? buildResearchDraftContext(research)
+    : topic ? `Topic: ${topic.title}\nAngle: ${topic.angle}\nTarget: ${topic.target}` : `Title: ${draft.title}`;
 
   // Generate context files for CLI models, fall back to inline system prompt for API models
   let contextOptions = {};
@@ -1630,7 +1975,7 @@ ipcMain.handle('drafts:generate', async (_e, draftId, userMessage) => {
   // Add the new user message
   const isFirst = !draft.conversation || draft.conversation.length === 0;
   const userContent = isFirst
-    ? `${topicContext}\n\n${userMessage || 'Generate a first draft of this content.'}`
+    ? `${sourceContext}\n\n${userMessage || 'Generate a first draft of this content.'}`
     : userMessage;
 
   messages.push({ role: 'user', content: userContent });
@@ -1746,6 +2091,7 @@ ipcMain.handle('app:getState', () => ({
   hasModels: ((settingsStore.get().models || []).length > 0),
   hasAudiences: audiencesStore.list().length > 0,
   hasFrameworks: frameworksStore.list().filter((f) => f.active).length > 0,
+  hasResearch: researchStore.list().length > 0,
   hasExisting: existingContentStore.list().length > 0
 }));
 
@@ -1758,6 +2104,7 @@ const EXPORTABLE = {
   voiceProfiles: { label: 'Voice Profiles', type: 'collection', store: () => voiceProfilesStore },
   platformProfiles: { label: 'Platform Profiles', type: 'collection', store: () => platformProfilesStore },
   audiences: { label: 'Audiences', type: 'collection', store: () => audiencesStore },
+  research: { label: 'Research', type: 'collection', store: () => researchStore },
   topics: { label: 'Topics', type: 'collection', store: () => topicsStore },
   drafts: { label: 'Drafts', type: 'collection', store: () => draftsStore },
   distributions: { label: 'Distributions', type: 'collection', store: () => distributionsStore },
