@@ -646,6 +646,7 @@ CC.views.settings = {
   renderMcpCard(m) {
     const connected = m.connected;
     const toolCount = m.toolCount || 0;
+    const visibleError = connected ? '' : (m.lastError || '');
     const statusBadge = connected
       ? CC.ui.badge('Connected', { tone: 'ok' })
       : CC.ui.badge('Not connected', { tone: 'dim' });
@@ -668,7 +669,7 @@ CC.views.settings = {
           : `${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}`
         }
         ${connected ? ` &middot; <span class="metric-ok">${toolCount} tools</span>` : ''}
-        ${m.lastError ? ` &middot; <span class="metric-danger">${CC.escapeHtml(m.lastError)}</span>` : ''}
+        ${visibleError ? ` &middot; <span class="metric-danger">${CC.escapeHtml(visibleError)}</span>` : ''}
       </div>
       ${connected && m.tools && m.tools.length ? CC.ui.tagRow(m.tools.map((t) => CC.ui.badge(t.name, { tone: 'dim', size: 'sm' })).join(''), { className: 'mcp-card-tags' }) : ''}
     </div>`;
