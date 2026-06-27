@@ -1291,7 +1291,7 @@ CC.views.settings = {
   // ── Utilities (Export / Import) ──────────────────────
   renderUtilities() {
     const sections = [
-      { id: 'settings', label: 'Models, MCPs & Profile', desc: 'API keys, OAuth tokens, model configs, MCP connections' },
+      { id: 'settings', label: 'Models, MCPs & Profile', desc: 'Model configs, MCP connections, and profile settings. API keys and tokens stay local.' },
       { id: 'frameworks', label: 'Frameworks', desc: 'Content frameworks and active toggles' },
       { id: 'antiAi', label: 'Anti-AI Rules', desc: 'Banned words, phrases, and structural patterns' },
       { id: 'voiceProfiles', label: 'Voice Profiles', desc: 'Voice identity, tone, and style settings' },
@@ -1306,7 +1306,7 @@ CC.views.settings = {
     return `<div class="util-section">
       <div class="ui-card util-card" data-util="export">
         <div class="ui-card-title util-card-title">Export Data</div>
-        <p class="util-desc">Select what to export. You'll get a single JSON file you can import on another machine to clone this setup.</p>
+        <p class="util-desc">Select what to export. You'll get a single JSON file you can import on another machine; API keys and bearer tokens are not included.</p>
         <div class="util-checkboxes">
           <label class="util-check-all">
             <input type="checkbox" id="util-export-all" />
@@ -1364,7 +1364,8 @@ CC.views.settings = {
         <div class="ui-card-title util-card-title">What's NOT exported</div>
         <ul class="util-notes">
           <li>Installed CLI tools (ContentStudio, Claude Code) - install these manually on the new machine</li>
-          <li>MCP <em>connection state</em> - you'll need to click Connect again after import (OAuth tokens may be expired)</li>
+          <li>API keys, bearer tokens, OAuth tokens, and sensitive MCP env vars - add these locally after import</li>
+          <li>MCP <em>connection state</em> - you'll need to click Connect again after import</li>
           <li>The app itself - install from the <a href="https://github.com/chrislema/contentcreator" target="_blank">GitHub repo</a> using the README instructions</li>
         </ul>
       </div>

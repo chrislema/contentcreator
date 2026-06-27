@@ -1705,6 +1705,95 @@ const EXPORTABLE = {
   existingContent: { label: 'Existing Content', type: 'collection', store: () => existingContentStore }
 };
 
+const SENSITIVE_ENV_KEY = /(api[_-]?key|bearer|token|secret|password|passwd|authorization)/i;
+
+function stripModelSecrets(model) {
+  const { apiKey, ...safeModel } = model || {};
+  return safeModel;
+}
+
+function stripMcpEnvSecrets(env = {}) {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !SENSITIVE_ENV_KEY.test(key))
+  );
+}
+
+function stripMcpSecrets(mcp) {
+  const portableMcp = { ...(mcp || {}) };
+  delete portableMcp.token;
+  delete portableMcp.connected;
+  delete portableMcp.toolCount;
+  delete portableMcp.tools;
+  delete portableMcp.lastConnected;
+  delete portableMcp.lastError;
+
+  if (portableMcp.oauth) {
+    const { accessToken, refreshToken, expiresAt, ...safeOauth } = portableMcp.oauth;
+    if (Object.keys(safeOauth).length > 0) portableMcp.oauth = safeOauth;
+    else delete portableMcp.oauth;
+  }
+
+  if (portableMcp.env) {
+    const safeEnv = stripMcpEnvSecrets(portableMcp.env);
+    if (Object.keys(safeEnv).length > 0) portableMcp.env = safeEnv;
+    else delete portableMcp.env;
+  }
+
+  return { ...portableMcp, connected: false, toolCount: 0, tools: [] };
+}
+
+function sanitizeSettingsForExport(settings = {}) {
+  const safeSettings = { ...settings };
+  if (Array.isArray(safeSettings.models)) {
+    safeSettings.models = safeSettings.models.map(stripModelSecrets);
+  }
+  if (Array.isArray(safeSettings.mcps)) {
+    safeSettings.mcps = safeSettings.mcps.map(stripMcpSecrets);
+  }
+  return safeSettings;
+}
+
+function findExistingById(records = [], id) {
+  if (!id) return null;
+  return records.find((record) => record.id === id) || null;
+}
+
+function restoreLocalModelSecrets(model, existingSettings = {}) {
+  const existingModel = findExistingById(existingSettings.models || [], model.id);
+  if (!existingModel?.apiKey) return model;
+  return { ...model, apiKey: existingModel.apiKey };
+}
+
+function restoreLocalMcpSecrets(mcp, existingSettings = {}) {
+  const existingMcp = findExistingById(existingSettings.mcps || [], mcp.id);
+  if (!existingMcp) return mcp;
+
+  const restored = { ...mcp };
+  if (existingMcp.token) restored.token = existingMcp.token;
+  if (existingMcp.oauth) restored.oauth = { ...(restored.oauth || {}), ...existingMcp.oauth };
+
+  const incomingEnv = restored.env || {};
+  const existingSecretEnv = Object.fromEntries(
+    Object.entries(existingMcp.env || {}).filter(([key]) => SENSITIVE_ENV_KEY.test(key))
+  );
+  if (Object.keys(existingSecretEnv).length > 0) {
+    restored.env = { ...incomingEnv, ...existingSecretEnv };
+  }
+
+  return restored;
+}
+
+function sanitizeSettingsForImport(settings = {}, existingSettings = {}) {
+  const safeSettings = sanitizeSettingsForExport(settings);
+  if (Array.isArray(safeSettings.models)) {
+    safeSettings.models = safeSettings.models.map((model) => restoreLocalModelSecrets(model, existingSettings));
+  }
+  if (Array.isArray(safeSettings.mcps)) {
+    safeSettings.mcps = safeSettings.mcps.map((mcp) => restoreLocalMcpSecrets(mcp, existingSettings));
+  }
+  return safeSettings;
+}
+
 ipcMain.handle('utilities:export', async (_e, sections) => {
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
     title: 'Export ContentCreator Data',
@@ -1727,7 +1816,8 @@ ipcMain.handle('utilities:export', async (_e, sections) => {
     const spec = EXPORTABLE[key];
     if (!spec) continue;
     if (spec.type === 'document') {
-      data[key] = spec.store().get();
+      const value = spec.store().get();
+      data[key] = key === 'settings' ? sanitizeSettingsForExport(value) : value;
     } else {
       data[key] = spec.store().list();
     }
@@ -1758,7 +1848,10 @@ ipcMain.handle('utilities:import', async (_e) => {
   for (const [key, spec] of Object.entries(EXPORTABLE)) {
     if (!data[key]) continue;
     if (spec.type === 'document') {
-      spec.store().set(data[key]);
+      const value = key === 'settings'
+        ? sanitizeSettingsForImport(data[key], spec.store().get())
+        : data[key];
+      spec.store().set(value);
     } else {
       spec.store().setAll(data[key]);
     }
