@@ -1459,7 +1459,7 @@ CC.views.settings = {
           <li>Installed CLI tools (ContentStudio, Claude Code) - install these manually on the new machine</li>
           <li>API keys, bearer tokens, OAuth tokens, and sensitive MCP env vars - add these locally after import</li>
           <li>MCP <em>connection state</em> - you'll need to click Connect again after import</li>
-          <li>The app itself - install from the <a href="https://github.com/chrislema/contentcreator" target="_blank" rel="noopener noreferrer">GitHub repo</a> using the README instructions</li>
+          <li>The app itself - download the latest Mac installer from <a href="https://github.com/chrislema/contentcreator/releases" target="_blank" rel="noopener noreferrer">GitHub Releases</a></li>
         </ul>
       </div>
     </div>`;

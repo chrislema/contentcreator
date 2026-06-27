@@ -35,12 +35,13 @@ The app works with any MCP-compliant server. Tested with:
 
 ## Getting Started
 
-### Prerequisites
+### Install on macOS
 
-- Node.js 18+
-- npm
+1. Download the latest `ContentCreator-*-arm64.dmg` from [GitHub Releases](https://github.com/chrislema/contentcreator/releases).
+2. Open the DMG and drag `ContentCreator.app` into `/Applications`.
+3. On first launch, macOS may warn that the app is from an unidentified developer. Right-click `ContentCreator.app`, choose **Open**, then confirm.
 
-### Install & Run
+### Development Setup
 
 ```bash
 git clone https://github.com/chrislema/contentcreator.git
@@ -48,6 +49,14 @@ cd contentcreator
 npm install
 npm start
 ```
+
+### Build a macOS Installer
+
+```bash
+npm run dist:mac
+```
+
+The unsigned `.dmg`, `.zip`, and `.app` directory are written to `release/`.
 
 ### First Run Setup
 

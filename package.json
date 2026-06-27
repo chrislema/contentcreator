@@ -5,22 +5,40 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder --publish never",
+    "dist:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
+    "pack:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --publish never"
   },
   "build": {
     "appId": "com.chrislema.contentcreator",
     "productName": "ContentCreator",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "mac": {
       "category": "public.app-category.productivity",
-      "target": ["dir"],
-      "icon": "build/icon.png"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "dir",
+          "arch": ["arm64"]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "identity": null
     },
     "files": [
       "main.js",
       "preload.js",
       "lib/**/*",
       "renderer/**/*",
-      "build/icon.png"
+      "build/icon.png",
+      "build/icon.icns"
     ],
     "directories": {
       "output": "release"
