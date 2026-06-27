@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -31,6 +31,41 @@ function logError(source, error) {
 }
 
 const ANALYTICS_ENRICHMENT_VERSION = 2;
+let nextBackgroundJobId = 1;
+const backgroundJobs = new Map();
+
+function ensureNoBackgroundJob(key, label) {
+  const running = backgroundJobs.get(key);
+  if (running) {
+    const error = new Error(`${label} is already running. Started at ${running.startedAt}.`);
+    error.code = 'JOB_ALREADY_RUNNING';
+    status(error.message);
+    throw error;
+  }
+}
+
+function startBackgroundJob(key, label, task) {
+  ensureNoBackgroundJob(key, label);
+  const job = {
+    id: `${key}-${nextBackgroundJobId++}`,
+    key,
+    label,
+    startedAt: new Date().toISOString()
+  };
+  backgroundJobs.set(key, job);
+
+  Promise.resolve()
+    .then(() => task(job))
+    .catch((e) => {
+      logError(`${key}:background`, e);
+      status(`${label} failed: ${e.message}`);
+    })
+    .finally(() => {
+      if (backgroundJobs.get(key) === job) backgroundJobs.delete(key);
+    });
+
+  return job;
+}
 
 function logAnalyticsEvent(event) {
   try {
@@ -252,6 +287,15 @@ function createWindow() {
   });
 
   win.setMenuBarVisibility(false);
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:') {
+        shell.openExternal(url).catch((e) => logError('window:openExternal', e));
+      }
+    } catch {}
+    return { action: 'deny' };
+  });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   const dir = getDataDir();
@@ -802,11 +846,14 @@ ipcMain.handle('existing:enrichAnalytics', async () => {
     return { enriched: 0, skipped: withUrls.length, total: withUrls.length };
   }
 
-  // Start background enrichment
-  enrichAnalyticsInBackground(needingEnrichment, googleMcp);
+  const job = startBackgroundJob(
+    'existing:enrichAnalytics',
+    'Analytics enrichment',
+    () => enrichAnalyticsInBackground(needingEnrichment, googleMcp)
+  );
 
   status(`Enriching ${needingEnrichment.length} articles with analytics...`);
-  return { started: true, count: needingEnrichment.length };
+  return { started: true, jobId: job.id, count: needingEnrichment.length };
 });
 
 // Background analytics enrichment - fetches GA4 + GSC data per article
@@ -958,11 +1005,14 @@ ipcMain.handle('existing:analyze', async () => {
     return { analyzed: 0, total: articles.length };
   }
 
-  // Start in background
-  analyzeArticlesInBackground(toAnalyze, model);
+  const job = startBackgroundJob(
+    'existing:analyze',
+    'Article analysis',
+    () => analyzeArticlesInBackground(toAnalyze, model)
+  );
 
   status(`Analyzing ${toAnalyze.length} articles... (this will take a while)`);
-  return { started: true, count: toAnalyze.length };
+  return { started: true, jobId: job.id, count: toAnalyze.length };
 });
 
 async function analyzeArticlesInBackground(articles, model) {
@@ -1034,17 +1084,26 @@ ipcMain.handle('topics:generate', async (_e, modelId) => {
     const model = models.find((m) => m.id === modelId) || models.find((m) => m.id === s.defaultModelId);
     if (!model) throw new Error('No model found. Set a default model in Settings.');
 
+    ensureNoBackgroundJob('topics:generate', 'Topic generation');
+
     // Clear old topics immediately so UI shows them being replaced
     topicsStore.setAll([]);
 
-    // Start generation in background - return immediately
-    generateTopicsInBackground(model, s);
+    const job = startBackgroundJob(
+      'topics:generate',
+      'Topic generation',
+      () => generateTopicsInBackground(model, s)
+    );
 
     status('Generating 25 ranked topics... (this may take several minutes)');
-    return { started: true };
+    return { started: true, jobId: job.id };
   } catch (e) {
-    logError('topics:generate', e);
-    status('Topic generation failed: ' + e.message);
+    if (e.code === 'JOB_ALREADY_RUNNING') {
+      status(e.message);
+    } else {
+      logError('topics:generate', e);
+      status('Topic generation failed: ' + e.message);
+    }
     throw e;
   }
 });

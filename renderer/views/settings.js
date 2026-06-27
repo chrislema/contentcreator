@@ -1054,7 +1054,7 @@ CC.views.settings = {
       </div>
       ${dateStr ? `<div class="existing-date">${dateStr}</div>` : ''}
       <div class="ui-card-meta settings-card-meta">
-        ${hasUrl ? `<a href="${CC.escapeHtml(a.publicUrl)}" target="_blank" class="existing-url">${CC.escapeHtml(a.publicUrl)}</a>` : '<span class="existing-no-url">No URL (run Fetch URLs in Utilities)</span>'}
+        ${hasUrl ? `<a href="${CC.escapeHtml(a.publicUrl)}" target="_blank" rel="noopener noreferrer" class="existing-url">${CC.escapeHtml(a.publicUrl)}</a>` : '<span class="existing-no-url">No URL (run Fetch URLs in Utilities)</span>'}
       </div>
       ${summary ? `<div class="existing-summary">${CC.escapeHtml(summary)}</div>` : ''}
       ${tags ? CC.ui.tagRow(tags, { className: 'settings-card-tags existing-tags-row' }) : ''}
@@ -1366,7 +1366,7 @@ CC.views.settings = {
           <li>Installed CLI tools (ContentStudio, Claude Code) - install these manually on the new machine</li>
           <li>API keys, bearer tokens, OAuth tokens, and sensitive MCP env vars - add these locally after import</li>
           <li>MCP <em>connection state</em> - you'll need to click Connect again after import</li>
-          <li>The app itself - install from the <a href="https://github.com/chrislema/contentcreator" target="_blank">GitHub repo</a> using the README instructions</li>
+          <li>The app itself - install from the <a href="https://github.com/chrislema/contentcreator" target="_blank" rel="noopener noreferrer">GitHub repo</a> using the README instructions</li>
         </ul>
       </div>
     </div>`;
