@@ -294,19 +294,21 @@ CC.views.settings = {
         <button id="model-chat-send" class="mcp-chat-send" ${models.length === 0 ? 'disabled' : ''}>&#9650;</button>
       </div>
       <div class="mcp-chat-meta">
-        <div class="mcp-chat-meta-item" id="model-chat-model-label">
-          <span class="mcp-chat-meta-label">Model</span>
-          <span class="mcp-chat-meta-value">${CC.escapeHtml(modelName)}</span>
+        <div class="mcp-chat-selector">
+          <div class="mcp-chat-meta-item" id="model-chat-model-label">
+            <span class="mcp-chat-meta-label">Model</span>
+            <span class="mcp-chat-meta-value">${CC.escapeHtml(modelName)}</span>
+          </div>
+          <select id="model-chat-model-select" class="hidden">
+            ${models.map((m) => {
+              const status = m.lastTested ? (m.lastTestResult ? ' (working)' : ' (failed)') : ' (untested)';
+              return `<option value="${m.id}" ${m.id === selectedModel ? 'selected' : ''}>${CC.escapeHtml((m.displayName || m.model) + status)}</option>`;
+            }).join('')}
+          </select>
         </div>
         <span class="badge ${workingCount > 0 ? 'ok' : 'dim'}">${workingCount}/${modelCount} working</span>
         ${history.length > 0 ? '<button class="mcp-chat-clear" id="model-chat-clear">Clear chat</button>' : ''}
       </div>
-      <select id="model-chat-model-select" class="hidden">
-        ${models.map((m) => {
-          const status = m.lastTested ? (m.lastTestResult ? ' (working)' : ' (failed)') : ' (untested)';
-          return `<option value="${m.id}" ${m.id === selectedModel ? 'selected' : ''}>${CC.escapeHtml((m.displayName || m.model) + status)}</option>`;
-        }).join('')}
-      </select>
     </div>`;
   },
 
@@ -710,30 +712,34 @@ CC.views.settings = {
         <button id="mcp-chat-send" class="mcp-chat-send" ${connectedMcps.length === 0 ? 'disabled' : ''}>&#9650;</button>
       </div>
       <div class="mcp-chat-meta">
-        <div class="mcp-chat-meta-item" id="mcp-chat-mcp-label">
-          <span class="mcp-chat-meta-label">MCP</span>
-          <span class="mcp-chat-meta-value">${CC.escapeHtml(mcpName)}</span>
+        <div class="mcp-chat-selector">
+          <div class="mcp-chat-meta-item" id="mcp-chat-mcp-label">
+            <span class="mcp-chat-meta-label">MCP</span>
+            <span class="mcp-chat-meta-value">${CC.escapeHtml(mcpName)}</span>
+          </div>
+          <select id="mcp-chat-mcp-select" class="hidden">
+            ${connectedMcps.map((m) => {
+              const toolCount = m.toolCount || 0;
+              return `<option value="${m.id}" ${m.id === selectedMcp ? 'selected' : ''}>${CC.escapeHtml(m.name + (toolCount ? ' (' + toolCount + ' tools)' : ''))}</option>`;
+            }).join('')}
+          </select>
         </div>
         <span class="badge ${connectedCount > 0 ? 'ok' : 'dim'}">${connectedCount}/${mcpCount} connected</span>
-        <div class="mcp-chat-meta-item" id="mcp-chat-model-label">
-          <span class="mcp-chat-meta-label">Model</span>
-          <span class="mcp-chat-meta-value">${CC.escapeHtml(modelName)}</span>
+        <div class="mcp-chat-selector">
+          <div class="mcp-chat-meta-item" id="mcp-chat-model-label">
+            <span class="mcp-chat-meta-label">Model</span>
+            <span class="mcp-chat-meta-value">${CC.escapeHtml(modelName)}</span>
+          </div>
+          <select id="mcp-chat-model-select" class="hidden">
+            ${models.map((m) => {
+              const status = m.lastTested ? (m.lastTestResult ? ' (working)' : ' (failed)') : ' (untested)';
+              return `<option value="${m.id}" ${m.id === selectedModel ? 'selected' : ''}>${CC.escapeHtml((m.displayName || m.model) + status)}</option>`;
+            }).join('')}
+          </select>
         </div>
         <span class="badge ${modelWorkingCount > 0 ? 'ok' : 'dim'}">${modelWorkingCount}/${modelCount} working</span>
         ${history.length > 0 ? '<button class="mcp-chat-clear" id="mcp-chat-clear">Clear chat</button>' : ''}
       </div>
-      <select id="mcp-chat-mcp-select" class="hidden">
-        ${connectedMcps.map((m) => {
-          const toolCount = m.toolCount || 0;
-          return `<option value="${m.id}" ${m.id === selectedMcp ? 'selected' : ''}>${CC.escapeHtml(m.name + (toolCount ? ' (' + toolCount + ' tools)' : ''))}</option>`;
-        }).join('')}
-      </select>
-      <select id="mcp-chat-model-select" class="hidden">
-        ${models.map((m) => {
-          const status = m.lastTested ? (m.lastTestResult ? ' (working)' : ' (failed)') : ' (untested)';
-          return `<option value="${m.id}" ${m.id === selectedModel ? 'selected' : ''}>${CC.escapeHtml((m.displayName || m.model) + status)}</option>`;
-        }).join('')}
-      </select>
     </div>`;
   },
 

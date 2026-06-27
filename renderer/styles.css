@@ -1260,6 +1260,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
+  min-width: 0;
 }
 
 .util-card-title {
@@ -1270,13 +1271,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .profile-cards-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   margin-top: 28px;
 }
 
 .profile-card {
   align-self: start;
+  min-width: 0;
 }
 
 .util-desc {
@@ -1388,7 +1390,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .util-action button {
-  align-self: flex-start;
+  align-self: flex-end;
+}
+
+.util-card[data-util="export"],
+.util-card[data-util="import"] {
+  display: flex;
+  flex-direction: column;
+}
+
+#util-export-btn,
+#util-import-btn {
+  align-self: flex-end;
 }
 
 .util-enrich-status {
@@ -1543,8 +1556,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .existing-grid {
   margin-top: 20px;
   display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: 16px;
+  width: 100%;
+  align-items: start;
 }
 
 .existing-grid > .mcp-card {
@@ -1558,6 +1573,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: var(--radius);
   padding: 16px 20px;
   margin-bottom: 12px;
+  min-width: 0;
 }
 
 .mcp-card-highlighted {
@@ -1571,19 +1587,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 8px;
+  min-width: 0;
 }
 
 .mcp-card-name {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .mcp-card-actions {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .mcp-card-url {
@@ -1727,6 +1747,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-wrap: wrap;
 }
 
+.mcp-chat-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .mcp-chat-meta-item {
   display: flex;
   align-items: center;
@@ -1757,7 +1783,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 500;
 }
 
-.mcp-chat-meta select:not(.hidden) {
+.mcp-chat-selector > select:not(.hidden) {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
   background: var(--panel);
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
@@ -1765,8 +1795,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--text);
   font-size: 12.5px;
   font-family: inherit;
-  width: auto;
-  max-width: 220px;
+  width: max-content;
+  min-width: 160px;
+  max-width: 280px;
+  box-shadow: var(--shadow);
 }
 
 .mcp-chat-clear {
@@ -1948,4 +1980,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 10px;
   margin-top: 12px;
   justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .profile-cards-row,
+  .existing-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
