@@ -1467,6 +1467,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: stretch;
 }
 
+.profile-form {
+  max-width: none;
+  width: 100%;
+}
+
+.profile-form .form-row {
+  flex-direction: column;
+  gap: 0;
+}
+
 .profile-card {
   min-width: 0;
   height: 100%;
