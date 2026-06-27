@@ -248,10 +248,7 @@ CC.views.settings = {
       <div class="ui-card-header mcp-card-top">
         <div class="ui-card-title mcp-card-name">${CC.escapeHtml(m.displayName || m.model)} ${statusBadge} ${defaultBadge}</div>
         <div class="ui-actions ui-card-actions mcp-card-actions">
-          ${isDefault
-            ? CC.ui.badge('Default Model', { tone: 'accent' })
-            : CC.ui.button('Set Default', { variant: 'ghost', data: { 'model-default': m.id } })
-          }
+          ${isDefault ? '' : CC.ui.button('Set Default', { variant: 'ghost', data: { 'model-default': m.id } })}
           ${CC.ui.button('Test', { data: { 'model-test': m.id } })}
           ${CC.ui.button('Edit', { variant: 'ghost', data: { 'model-edit': m.id } })}
           ${CC.ui.button('Remove', { variant: 'ghost', data: { 'model-remove': m.id } })}
