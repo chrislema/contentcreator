@@ -614,6 +614,197 @@ ipcMain.handle('existing:syncMcp', async () => {
   return { tagsUpdated, imported, total: allPosts.length };
 });
 
+// Fetch public URLs for AI-tagged articles via Payload CMS MCP (one-time setup)
+ipcMain.handle('existing:fetchUrls', async () => {
+  const s = settingsStore.get();
+  const payloadMcp = (s.mcps || []).find((m) => m.connected && m.name && m.name.toLowerCase().includes('payload'));
+  if (!payloadMcp) throw new Error('Payload CMS MCP not connected. Connect it in Settings > MCPs first.');
+
+  const articles = existingContentStore.list();
+  const aiArticles = articles.filter((a) => (a.tags || []).includes('ai'));
+  const needingUrls = aiArticles.filter((a) => !a.publicUrl);
+
+  if (needingUrls.length === 0) {
+    return { updated: 0, skipped: aiArticles.length, total: aiArticles.length };
+  }
+
+  status(`Fetching URLs for ${needingUrls.length} articles...`);
+
+  // Fetch all AI-tagged posts from CMS once (paginate)
+  let allPosts = [];
+  let page = 1;
+  let hasMore = true;
+  while (hasMore) {
+    const result = await callTool(payloadMcp, 'find_posts', {
+      limit: 100,
+      page,
+      where: { tags: { contains: 'ai' } }
+    });
+    const data = JSON.parse(result);
+    allPosts = allPosts.concat(data.docs || []);
+    hasMore = data.hasNextPage;
+    page++;
+  }
+
+  // Build slug index by normalized title
+  const slugIndex = {};
+  for (const post of allPosts) {
+    const normalized = (post.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ');
+    if (normalized) slugIndex[normalized] = post.slug || '';
+  }
+
+  let updated = 0;
+  let notFound = 0;
+
+  for (const article of needingUrls) {
+    const normalized = (article.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ');
+    const slug = slugIndex[normalized];
+    if (slug) {
+      existingContentStore.add({
+        ...article,
+        slug,
+        pagePath: '/' + slug,
+        publicUrl: 'https://chrislema.com/' + slug
+      });
+      updated++;
+    } else {
+      notFound++;
+    }
+  }
+
+  status(`URLs fetched: ${updated} updated, ${notFound} not found in CMS`);
+  return { updated, notFound, total: aiArticles.length };
+});
+
+// Enrich articles with analytics data from Google MCP (GA4 + GSC)
+ipcMain.handle('existing:enrichAnalytics', async () => {
+  const s = settingsStore.get();
+  const googleMcp = (s.mcps || []).find((m) => m.connected && /google/i.test(m.name));
+  if (!googleMcp) throw new Error('Google MCP not connected. Connect it in Settings > MCPs first.');
+
+  const articles = existingContentStore.list();
+  const withUrls = articles.filter((a) => a.pagePath && (a.tags || []).includes('ai'));
+  const needingEnrichment = withUrls.filter((a) => !a.analytics);
+
+  if (needingEnrichment.length === 0) {
+    return { enriched: 0, skipped: withUrls.length, total: withUrls.length };
+  }
+
+  // Start background enrichment
+  enrichAnalyticsInBackground(needingEnrichment, googleMcp);
+
+  status(`Enriching ${needingEnrichment.length} articles with analytics...`);
+  return { started: true, count: needingEnrichment.length };
+});
+
+// Background analytics enrichment - fetches GA4 + GSC data per article
+async function enrichAnalyticsInBackground(articles, googleMcp) {
+  let done = 0;
+  const total = articles.length;
+
+  for (const article of articles) {
+    try {
+      status(`Enriching ${done + 1}/${total}: ${article.title.slice(0, 50)}...`);
+
+      const pagePath = article.pagePath;
+      const analytics = { enrichedAt: new Date().toISOString() };
+
+      // GA4: last 30 days traffic + engagement
+      try {
+        const ga30 = await callTool(googleMcp, 'ga4_run_report', {
+          dimensions: ['pagePath'],
+          metrics: ['screenPageViews', 'activeUsers', 'averageSessionDuration', 'engagementRate'],
+          startDate: '30daysAgo',
+          endDate: 'yesterday',
+          dimensionFilter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT', value: pagePath } },
+          limit: 1
+        });
+        const gaData = JSON.parse(ga30);
+        const row = gaData?.data?.rows?.[0];
+        if (row) {
+          const metrics = row.metricValues || row.metrics;
+          analytics.last30d = {
+            pageViews: parseInt(metrics[0]?.value || metrics?.screenPageViews || '0'),
+            activeUsers: parseInt(metrics[1]?.value || metrics?.activeUsers || '0'),
+            avgSessionDuration: parseFloat(metrics[2]?.value || '0'),
+            engagementRate: parseFloat(metrics[3]?.value || '0')
+          };
+        }
+      } catch (e) { /* skip GA4 errors per article */ }
+
+      // GA4: top 5 countries (last 90 days)
+      try {
+        const gaCountries = await callTool(googleMcp, 'ga4_run_report', {
+          dimensions: ['country'],
+          metrics: ['activeUsers'],
+          startDate: '90daysAgo',
+          endDate: 'yesterday',
+          dimensionFilter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT', value: pagePath } },
+          orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+          limit: 5
+        });
+        const cData = JSON.parse(gaCountries);
+        analytics.topCountries = (cData?.data?.rows || []).map((r) => ({
+          country: r.dimensionValues?.[0]?.value || r.dimensions?.[0] || '',
+          users: parseInt(r.metricValues?.[0]?.value || '0')
+        }));
+      } catch (e) { /* skip */ }
+
+      // GA4: top 5 traffic sources (last 90 days)
+      try {
+        const gaSources = await callTool(googleMcp, 'ga4_run_report', {
+          dimensions: ['sessionSource'],
+          metrics: ['activeUsers'],
+          startDate: '90daysAgo',
+          endDate: 'yesterday',
+          dimensionFilter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT', value: pagePath } },
+          orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+          limit: 5
+        });
+        const sData = JSON.parse(gaSources);
+        analytics.topSources = (sData?.data?.rows || []).map((r) => ({
+          source: r.dimensionValues?.[0]?.value || r.dimensions?.[0] || '',
+          users: parseInt(r.metricValues?.[0]?.value || '0')
+        }));
+      } catch (e) { /* skip */ }
+
+      // GSC: top 5 queries driving traffic (last 28 days)
+      try {
+        const gscQueries = await callTool(googleMcp, 'gsc_search_analytics', {
+          dimensions: ['query'],
+          startDate: '28daysAgo',
+          endDate: 'yesterday',
+          dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'EXACT', expression: pagePath }] }],
+          rowLimit: 5
+        });
+        const qData = JSON.parse(gscQueries);
+        analytics.topQueries = (qData?.data?.rows || []).map((r) => ({
+          query: r.keys?.[0] || '',
+          clicks: r.clicks || 0,
+          impressions: r.impressions || 0,
+          ctr: r.ctr || 0,
+          position: r.position || 0
+        }));
+      } catch (e) { /* skip */ }
+
+      existingContentStore.add({ ...article, analytics });
+      done++;
+
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('analytics:progress', { done, total, articleId: article.id });
+      }
+    } catch (e) {
+      logError('enrichAnalytics:' + article.id, e);
+      done++;
+    }
+  }
+
+  status(`Analytics enrichment complete: ${done}/${total} articles`);
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('analytics:complete', { done, total });
+  }
+}
+
 // Generate AI analysis summaries for all existing content
 ipcMain.handle('existing:analyze', async () => {
   const s = settingsStore.get();

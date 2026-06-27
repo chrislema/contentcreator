@@ -87,40 +87,44 @@ CC.views.settings = {
       <div style="display:flex;gap:12px;margin-top:8px">
         <button class="btn-primary" id="pf-save">Save Profile</button>
       </div>
+    </div>
 
-      <hr style="margin:28px 0;border:none;border-top:1px solid var(--border)" />
-      <h3 style="font-size:15px;margin:0 0 12px">Voice Profiles</h3>
-      <div style="margin-bottom:12px">
-        <button class="btn-ghost btn-sm" id="vp-import">Import Voice Profile (.md)</button>
-      </div>
-      ${CC.state.voiceProfiles.map((vp) => `
-        <div class="list-item">
-          <div class="list-item-info">
-            <div class="list-item-title">${CC.escapeHtml(vp.name)} ${vp.isDefault ? '<span class="badge accent">default</span>' : ''}</div>
-            <div class="list-item-sub">${CC.escapeHtml((vp.identity || '').slice(0, 80))}...</div>
-          </div>
-          <div class="list-item-actions">
-            ${!vp.isDefault ? `<button class="icon-btn" data-vp-remove="${vp.id}">&times;</button>` : ''}
-          </div>
+    <div class="profile-cards-row">
+      <div class="util-card profile-card">
+        <h3 style="font-size:15px;margin:0 0 12px">Voice Profiles</h3>
+        <div style="margin-bottom:12px">
+          <button class="btn-ghost btn-sm" id="vp-import">Import Voice Profile (.md)</button>
         </div>
-      `).join('')}
+        ${CC.state.voiceProfiles.map((vp) => `
+          <div class="list-item">
+            <div class="list-item-info">
+              <div class="list-item-title">${CC.escapeHtml(vp.name)} ${vp.isDefault ? '<span class="badge accent">default</span>' : ''}</div>
+              <div class="list-item-sub">${CC.escapeHtml((vp.identity || '').slice(0, 80))}...</div>
+            </div>
+            <div class="list-item-actions">
+              ${!vp.isDefault ? `<button class="icon-btn" data-vp-remove="${vp.id}">&times;</button>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
 
-      <hr style="margin:28px 0;border:none;border-top:1px solid var(--border)" />
-      <h3 style="font-size:15px;margin:0 0 12px">Platform Profiles</h3>
-      <div style="margin-bottom:12px">
-        <button class="btn-ghost btn-sm" id="pp-import">Import Platform Profile (.md)</button>
-      </div>
-      ${CC.state.platformProfiles.map((pp) => `
-        <div class="list-item">
-          <div class="list-item-info">
-            <div class="list-item-title">${CC.escapeHtml(pp.name)} ${pp.isDefault ? '<span class="badge accent">default</span>' : ''}</div>
-            <div class="list-item-sub">Platforms: ${Object.keys(pp.platforms || {}).join(', ')}</div>
-          </div>
-          <div class="list-item-actions">
-            ${!pp.isDefault ? `<button class="icon-btn" data-pp-remove="${pp.id}">&times;</button>` : ''}
-          </div>
+      <div class="util-card profile-card">
+        <h3 style="font-size:15px;margin:0 0 12px">Platform Profiles</h3>
+        <div style="margin-bottom:12px">
+          <button class="btn-ghost btn-sm" id="pp-import">Import Platform Profile (.md)</button>
         </div>
-      `).join('')}
+        ${CC.state.platformProfiles.map((pp) => `
+          <div class="list-item">
+            <div class="list-item-info">
+              <div class="list-item-title">${CC.escapeHtml(pp.name)} ${pp.isDefault ? '<span class="badge accent">default</span>' : ''}</div>
+              <div class="list-item-sub">Platforms: ${Object.keys(pp.platforms || {}).join(', ')}</div>
+            </div>
+            <div class="list-item-actions">
+              ${!pp.isDefault ? `<button class="icon-btn" data-pp-remove="${pp.id}">&times;</button>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
     </div>`;
   },
 
@@ -1007,9 +1011,7 @@ CC.views.settings = {
 
     return `<div class="mcp-section">
       <div class="existing-import-row">
-        <button class="btn-primary btn-sm" id="existing-import">+ Import Articles</button>
-        <button class="btn-ghost btn-sm" id="existing-sync-mcp">Update with MCP</button>
-        <button class="btn-ghost btn-sm" id="existing-analyze" ${analyzedCount === articles.length && articles.length > 0 ? 'disabled' : ''}>${analyzedCount === articles.length && articles.length > 0 ? 'Summaries Ready' : `Generate Summaries${analyzedCount > 0 ? ` (${analyzedCount}/${articles.length})` : ''}`}</button>
+        <button class="btn-primary btn-sm" id="existing-sync-mcp">Update with MCP</button>
       </div>
       <div class="existing-controls">
         <select id="existing-tag-filter" class="existing-select">
@@ -1022,7 +1024,7 @@ CC.views.settings = {
         </select>
         <span class="existing-count">${filtered.length} article${filtered.length === 1 ? '' : 's'}</span>
       </div>
-      <div class="mcp-list">
+      <div class="existing-grid">
         ${filtered.length === 0
           ? CC.empty('No articles found.', articles.length === 0 ? 'Select markdown or text files to build your content library.' : 'Try a different tag filter.')
           : filtered.map((a) => this.renderExistingCard(a)).join('')
@@ -1036,17 +1038,78 @@ CC.views.settings = {
       ? new Date(a.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
       : '';
     const tags = (a.tags || []).map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t)}</span>`).join('');
+    const hasAnalytics = !!a.analytics;
+    const hasUrl = !!a.publicUrl;
     return `<div class="mcp-card">
       <div class="mcp-card-top">
         <div class="mcp-card-name">${CC.escapeHtml(a.title)}</div>
         <div class="mcp-card-actions">
           ${dateStr ? `<span class="existing-date">${dateStr}</span>` : ''}
+          ${hasAnalytics ? `<button class="btn-ghost btn-sm" data-existing-details="${a.id}">Details</button>` : ''}
           <button class="btn-primary btn-sm" data-existing-view="${a.id}">View</button>
           <button class="btn-danger btn-sm" data-existing-remove="${a.id}">Remove</button>
         </div>
       </div>
-      <div class="mcp-card-url">${CC.escapeHtml((a.excerpt || '').slice(0, 180))}${(a.excerpt || '').length > 180 ? '...' : ''}</div>
-      ${tags ? `<div class="mcp-card-tags">${tags}</div>` : ''}
+      <div class="mcp-card-url">
+        ${hasUrl ? `<a href="${CC.escapeHtml(a.publicUrl)}" target="_blank" class="existing-url">${CC.escapeHtml(a.publicUrl)}</a>` : '<span class="existing-no-url">No URL (run Fetch URLs in Utilities)</span>'}
+      </div>
+      ${tags ? `<div class="mcp-card-tags">
+        ${tags}
+        ${hasAnalytics ? '<span class="badge ok" style="font-size:10.5px">Analytics</span>' : ''}
+      </div>` : ''}
+      ${this.selectedExistingDetail === a.id && hasAnalytics ? this.renderAnalyticsPanel(a) : ''}
+    </div>`;
+  },
+
+  renderAnalyticsPanel(a) {
+    const an = a.analytics || {};
+    const t30 = an.last30d || {};
+    const countries = an.topCountries || [];
+    const sources = an.topSources || [];
+    const queries = an.topQueries || [];
+
+    return `<div class="analytics-panel">
+      <div class="analytics-panel-header">
+        <span class="analytics-panel-title">Analytics</span>
+        <button class="btn-ghost btn-sm" data-existing-details-close>Close</button>
+      </div>
+      <div class="analytics-grid">
+        <div class="analytics-stat">
+          <span class="analytics-stat-label">Page Views (30d)</span>
+          <span class="analytics-stat-value">${(t30.pageViews || 0).toLocaleString()}</span>
+        </div>
+        <div class="analytics-stat">
+          <span class="analytics-stat-label">Active Users (30d)</span>
+          <span class="analytics-stat-value">${(t30.activeUsers || 0).toLocaleString()}</span>
+        </div>
+        <div class="analytics-stat">
+          <span class="analytics-stat-label">Avg Session</span>
+          <span class="analytics-stat-value">${t30.avgSessionDuration ? Math.round(t30.avgSessionDuration) + 's' : '-'}</span>
+        </div>
+        <div class="analytics-stat">
+          <span class="analytics-stat-label">Engagement</span>
+          <span class="analytics-stat-value">${t30.engagementRate ? Math.round(t30.engagementRate * 100) + '%' : '-'}</span>
+        </div>
+      </div>
+      ${countries.length ? `<div class="analytics-section">
+        <div class="analytics-section-title">Top Countries</div>
+        ${countries.map((c) => `<div class="analytics-row"><span>${CC.escapeHtml(c.country || 'Unknown')}</span><span>${(c.users || 0).toLocaleString()}</span></div>`).join('')}
+      </div>` : ''}
+      ${sources.length ? `<div class="analytics-section">
+        <div class="analytics-section-title">Top Sources</div>
+        ${sources.map((s) => `<div class="analytics-row"><span>${CC.escapeHtml(s.source || 'Unknown')}</span><span>${(s.users || 0).toLocaleString()}</span></div>`).join('')}
+      </div>` : ''}
+      ${queries.length ? `<div class="analytics-section">
+        <div class="analytics-section-title">Top Search Queries</div>
+        ${queries.map((q) => `<div class="analytics-query-row">
+          <span class="analytics-query-text">${CC.escapeHtml(q.query)}</span>
+          <div class="analytics-query-stats">
+            <span class="analytics-query-stat">${q.clicks} clicks</span>
+            <span class="analytics-query-stat">#${q.position ? q.position.toFixed(1) : '-'}</span>
+          </div>
+        </div>`).join('')}
+      </div>` : ''}
+      <div class="analytics-enriched-at">Enriched: ${an.enrichedAt ? new Date(an.enrichedAt).toLocaleDateString() : '-'}</div>
     </div>`;
   },
 
@@ -1067,6 +1130,22 @@ CC.views.settings = {
     document.getElementById('existing-sort')?.addEventListener('change', (e) => {
       this.existingSort = e.target.value;
       CC.navigate('settings');
+    });
+
+    // Details panel toggle
+    document.querySelectorAll('[data-existing-details]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.existingDetails;
+        this.selectedExistingDetail = this.selectedExistingDetail === id ? null : id;
+        CC.navigate('settings');
+      });
+    });
+
+    document.querySelectorAll('[data-existing-details-close]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.selectedExistingDetail = null;
+        CC.navigate('settings');
+      });
     });
 
     document.getElementById('existing-sync-mcp')?.addEventListener('click', async () => {
@@ -1211,7 +1290,7 @@ CC.views.settings = {
     ];
 
     return `<div class="util-section">
-      <div class="util-card">
+      <div class="util-card" data-util="export">
         <div class="util-card-title">Export Data</div>
         <p class="util-desc">Select what to export. You'll get a single JSON file you can import on another machine to clone this setup.</p>
         <div class="util-checkboxes">
@@ -1232,7 +1311,35 @@ CC.views.settings = {
         <button class="btn-primary btn-sm" id="util-export-btn">Export Selected</button>
       </div>
 
-      <div class="util-card">
+      <div class="util-card" data-util="enrich">
+        <div class="util-card-title">Content Data Enrichment</div>
+        <p class="util-desc">One-time setup and rarely-used tools. Run these to build and enrich your content library. Daily operations like "Update with MCP" live in the Existing Content tab.</p>
+        <div class="util-action-row">
+          <div class="util-action">
+            <span class="util-action-label">Import Articles</span>
+            <span class="util-action-desc">Select markdown/text files from your local drive to build the content library.</span>
+            <button class="btn-primary btn-sm" id="util-import-articles">Import Articles</button>
+          </div>
+          <div class="util-action">
+            <span class="util-action-label">Fetch Article URLs from CMS</span>
+            <span class="util-action-desc">Gets the public URL (slug) for each AI-tagged article from Payload. Run this before analytics.</span>
+            <button class="btn-primary btn-sm" id="util-fetch-urls">Fetch URLs</button>
+          </div>
+          <div class="util-action">
+            <span class="util-action-label">Enrich with Analytics</span>
+            <span class="util-action-desc">Pulls GA4 + GSC data per article (traffic, countries, sources, top queries). Requires URLs to be set first.</span>
+            <button class="btn-primary btn-sm" id="util-enrich-analytics">Enrich Analytics</button>
+          </div>
+          <div class="util-action">
+            <span class="util-action-label">Generate Summaries</span>
+            <span class="util-action-desc">Runs all articles through the default model to create 2-3 sentence analysis summaries. Used by topic intelligence for deduplication.</span>
+            <button class="btn-primary btn-sm" id="util-generate-summaries">Generate Summaries</button>
+          </div>
+        </div>
+        <div id="util-enrich-status" class="util-enrich-status"></div>
+      </div>
+
+      <div class="util-card" data-util="import">
         <div class="util-card-title">Import Data</div>
         <p class="util-desc">Select a previously exported JSON file. This will overwrite existing data for every section found in the file.</p>
         <button class="btn-primary btn-sm" id="util-import-btn">Choose File &amp; Import</button>
@@ -1295,6 +1402,113 @@ CC.views.settings = {
         btn.disabled = false;
         btn.textContent = 'Export Selected';
       }
+    });
+
+    // Import articles
+    document.getElementById('util-import-articles')?.addEventListener('click', async () => {
+      const result = await CC.api.existing.importFiles();
+      if (result) {
+        await CC.refresh('existing');
+        CC.showStatus(`Imported ${result.length} articles`);
+      }
+    });
+
+    // Generate summaries
+    document.getElementById('util-generate-summaries')?.addEventListener('click', async () => {
+      const btn = document.getElementById('util-generate-summaries');
+      btn.disabled = true;
+      btn.textContent = 'Starting...';
+      CC.setStickyStatus(true);
+      CC.showStatus('Generating summaries...');
+      try {
+        const result = await CC.api.existing.analyze();
+        if (result.started) {
+          const statusDiv = document.getElementById('util-enrich-status');
+          if (statusDiv) {
+            statusDiv.innerHTML = `<div class="badge accent" style="margin-top:10px">Generating summaries for ${result.count} articles...</div>`;
+          }
+          btn.textContent = 'Summarizing...';
+        } else {
+          CC.setStickyStatus(false);
+          CC.showStatus('All articles already analyzed');
+          btn.disabled = false;
+          btn.textContent = 'Generate Summaries';
+        }
+      } catch (e) {
+        CC.setStickyStatus(false);
+        CC.showStatus('Failed: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Generate Summaries';
+      }
+    });
+
+    // Fetch URLs from CMS
+    document.getElementById('util-fetch-urls')?.addEventListener('click', async () => {
+      const btn = document.getElementById('util-fetch-urls');
+      btn.disabled = true;
+      btn.textContent = 'Fetching...';
+      CC.setStickyStatus(true);
+      CC.showStatus('Fetching article URLs from Payload CMS...');
+      try {
+        const result = await CC.api.existing.fetchUrls();
+        CC.setStickyStatus(false);
+        CC.showStatus(`URLs: ${result.updated} updated, ${result.notFound || 0} not found`);
+        await CC.refresh('existing');
+      } catch (e) {
+        CC.setStickyStatus(false);
+        CC.showStatus('Failed: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Fetch URLs';
+      }
+    });
+
+    // Enrich analytics
+    document.getElementById('util-enrich-analytics')?.addEventListener('click', async () => {
+      const btn = document.getElementById('util-enrich-analytics');
+      const statusDiv = document.getElementById('util-enrich-status');
+      btn.disabled = true;
+      btn.textContent = 'Enriching...';
+      CC.setStickyStatus(true);
+      CC.showStatus('Starting analytics enrichment...');
+      try {
+        const result = await CC.api.existing.enrichAnalytics();
+        if (result.started) {
+          statusDiv.innerHTML = `<div class="badge accent" style="margin-top:10px">Enriching ${result.count} articles in background...</div>`;
+        } else {
+          CC.setStickyStatus(false);
+          CC.showStatus(`All articles already enriched (${result.skipped})`);
+          btn.disabled = false;
+          btn.textContent = 'Enrich Analytics';
+        }
+      } catch (e) {
+        CC.setStickyStatus(false);
+        CC.showStatus('Failed: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Enrich Analytics';
+      }
+    });
+
+    // Analytics progress events
+    if (window._analyticsProgressHandler) window._analyticsProgressHandler();
+    window._analyticsProgressHandler = CC.api.onAnalyticsProgress((data) => {
+      const statusDiv = document.getElementById('util-enrich-status');
+      if (statusDiv) {
+        statusDiv.innerHTML = `<div class="badge accent" style="margin-top:10px">Enriching ${data.done}/${data.total}...</div>`;
+      }
+      CC.showStatus(`Enriching ${data.done}/${data.total}...`);
+    });
+
+    if (window._analyticsCompleteHandler) window._analyticsCompleteHandler();
+    window._analyticsCompleteHandler = CC.api.onAnalyticsComplete((data) => {
+      CC.setStickyStatus(false);
+      const statusDiv = document.getElementById('util-enrich-status');
+      if (statusDiv) {
+        statusDiv.innerHTML = `<div class="badge ok" style="margin-top:10px">Done: ${data.done}/${data.total} articles enriched</div>`;
+      }
+      CC.showStatus(`Analytics complete: ${data.done}/${data.total}`);
+      const btn = document.getElementById('util-enrich-analytics');
+      if (btn) { btn.disabled = false; btn.textContent = 'Enrich Analytics'; }
+      CC.refresh('existing');
     });
 
     // Import

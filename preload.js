@@ -25,6 +25,18 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('existing:analyzed', handler);
   },
 
+  onAnalyticsProgress: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on('analytics:progress', handler);
+    return () => ipcRenderer.removeListener('analytics:progress', handler);
+  },
+
+  onAnalyticsComplete: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on('analytics:complete', handler);
+    return () => ipcRenderer.removeListener('analytics:complete', handler);
+  },
+
   // Settings
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
@@ -98,7 +110,9 @@ contextBridge.exposeInMainWorld('api', {
     remove: (id) => ipcRenderer.invoke('existing:remove', id),
     importFiles: () => ipcRenderer.invoke('existing:importFiles'),
     syncMcp: () => ipcRenderer.invoke('existing:syncMcp'),
-    analyze: () => ipcRenderer.invoke('existing:analyze')
+    analyze: () => ipcRenderer.invoke('existing:analyze'),
+    fetchUrls: () => ipcRenderer.invoke('existing:fetchUrls'),
+    enrichAnalytics: () => ipcRenderer.invoke('existing:enrichAnalytics')
   },
 
   // Import
