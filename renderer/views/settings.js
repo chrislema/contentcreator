@@ -90,7 +90,7 @@ CC.views.settings = {
     <div class="profile-cards-row">
       <div class="ui-card util-card profile-card">
         ${CC.ui.cardHeader(CC.escapeHtml('Voice Profiles'), {
-          actions: CC.ui.button('Import Voice Profile (.md)', { id: 'vp-import', variant: 'ghost' })
+          actions: CC.ui.button('Import Voice Profile (.md)', { id: 'vp-import' })
         })}
         ${CC.state.voiceProfiles.map((vp) => `
           <div class="ui-list-item list-item">
@@ -107,7 +107,7 @@ CC.views.settings = {
 
       <div class="ui-card util-card profile-card">
         ${CC.ui.cardHeader(CC.escapeHtml('Platform Profiles'), {
-          actions: CC.ui.button('Import Platform Profile (.md)', { id: 'pp-import', variant: 'ghost' })
+          actions: CC.ui.button('Import Platform Profile (.md)', { id: 'pp-import' })
         })}
         ${CC.state.platformProfiles.map((pp) => `
           <div class="ui-list-item list-item">

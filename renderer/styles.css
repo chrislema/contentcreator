@@ -1472,6 +1472,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   height: 100%;
 }
 
+.profile-card .ui-card-header {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.profile-card .ui-card-actions {
+  margin-left: auto;
+}
+
 .util-desc {
   font-size: 13px;
   color: var(--muted);
