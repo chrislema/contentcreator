@@ -1043,26 +1043,27 @@ CC.views.settings = {
     const dateStr = a.date
       ? new Date(a.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
       : '';
-    const tags = (a.tags || []).map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t)}</span>`).join('');
+    const summary = (a.analysis || a.description || a.excerpt || '').trim();
+    const tagBadges = (a.tags || []).map((t) => `<span class="badge dim" style="font-size:10.5px">${CC.escapeHtml(t)}</span>`).join('');
     const hasAnalytics = !!a.analytics;
     const hasUrl = !!a.publicUrl;
+    const tags = `${tagBadges}${hasAnalytics ? '<span class="badge ok" style="font-size:10.5px">Analytics</span>' : ''}`;
+
     return `<div class="mcp-card">
       <div class="mcp-card-top">
         <div class="mcp-card-name">${CC.escapeHtml(a.title)}</div>
         <div class="mcp-card-actions">
-          ${dateStr ? `<span class="existing-date">${dateStr}</span>` : ''}
           ${hasAnalytics ? `<button class="btn-ghost btn-sm" data-existing-details="${a.id}">Details</button>` : ''}
           <button class="btn-primary btn-sm" data-existing-view="${a.id}">View</button>
           <button class="btn-danger btn-sm" data-existing-remove="${a.id}">Remove</button>
         </div>
       </div>
+      ${dateStr ? `<div class="existing-date">${dateStr}</div>` : ''}
       <div class="mcp-card-url">
         ${hasUrl ? `<a href="${CC.escapeHtml(a.publicUrl)}" target="_blank" class="existing-url">${CC.escapeHtml(a.publicUrl)}</a>` : '<span class="existing-no-url">No URL (run Fetch URLs in Utilities)</span>'}
       </div>
-      ${tags ? `<div class="mcp-card-tags">
-        ${tags}
-        ${hasAnalytics ? '<span class="badge ok" style="font-size:10.5px">Analytics</span>' : ''}
-      </div>` : ''}
+      ${summary ? `<div class="existing-summary">${CC.escapeHtml(summary)}</div>` : ''}
+      ${tags ? `<div class="mcp-card-tags existing-tags-row">${tags}</div>` : ''}
       ${this.selectedExistingDetail === a.id && hasAnalytics ? this.renderAnalyticsPanel(a) : ''}
     </div>`;
   },
