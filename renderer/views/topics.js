@@ -19,7 +19,7 @@ CC.views.topics = {
     `)}
     <div class="section-body">
       ${this.lastSources ? `<div class="topic-source-summary">Generated from: ${CC.escapeHtml(this.lastSources)}</div>` : ''}
-      <div class="ui-toolbar toolbar">
+      <div class="ui-toolbar">
         <input id="topic-search" type="text" placeholder="Search topics..." value="${CC.escapeHtml(this.searchQuery)}" />
         <select id="topic-filter-segment">
           <option value="">All segments</option>
@@ -39,7 +39,7 @@ CC.views.topics = {
         </select>
       </div>
       ${topics.length === 0 ? CC.empty('No topics yet.', 'Generate topics from your connected data or add one manually.') : ''}
-      <div class="ui-grid card-grid">
+      <div class="ui-grid ui-card-grid">
         ${topics.map((t, i) => this.renderCard(t, i, hasScores)).join('')}
       </div>
     </div>`;
@@ -74,9 +74,9 @@ CC.views.topics = {
     const rank = hasScores ? idx + 1 : null;
     const isCompleted = t.status === 'completed' || t.status === 'published';
 
-    return `<div class="ui-card card ${rank === 1 ? 'card-top-ranked' : ''} ${isCompleted ? 'card-completed' : ''}" data-topic-id="${t.id}">
+    return `<div class="ui-card topic-card ${rank === 1 ? 'topic-card-top-ranked' : ''} ${isCompleted ? 'topic-card-completed' : ''}" data-topic-id="${t.id}">
       <div class="ui-card-header topic-card-header">
-        <div class="ui-card-title card-title">${rank ? `<span class="topic-rank">#${rank}</span> ` : ''}${CC.escapeHtml(t.title)}</div>
+        <div class="ui-card-title">${rank ? `<span class="topic-rank">#${rank}</span> ` : ''}${CC.escapeHtml(t.title)}</div>
         ${scores && !isCompleted
           ? `<span class="topic-score"><span class="topic-score-num">${scores.total}</span><span class="topic-score-max">/50</span></span>`
           : isCompleted
@@ -84,7 +84,7 @@ CC.views.topics = {
             : `<span class="priority priority-${p}"><span class="priority-dot"></span> P${p}</span>`
         }
       </div>
-      <div class="card-desc">${CC.escapeHtml(t.angle || '')}</div>
+      <div class="ui-card-desc">${CC.escapeHtml(t.angle || '')}</div>
       ${scores && !isCompleted ? `<div class="topic-scores-bar">
         <span class="topic-score-pill" title="Search Demand: Backed by real GSC query volume">Search ${scores.searchDemand}</span>
         <span class="topic-score-pill" title="Performance Potential: Aligned with proven GA traffic patterns">Traffic ${scores.performancePotential}</span>
@@ -93,12 +93,12 @@ CC.views.topics = {
         <span class="topic-score-pill" title="Uniqueness: Contrarian or non-obvious angle">Unique ${scores.uniqueness}</span>
       </div>` : ''}
       ${t.rationale ? `<div class="topic-rationale">${CC.escapeHtml(t.rationale)}</div>` : ''}
-      <div class="ui-tags topic-tags-row">
+      <div class="ui-tags">
         ${t.target ? CC.ui.badge(t.target, { tone: 'accent' }) : ''}
         ${(t.cmsTags || []).map((tag) => CC.ui.badge(tag)).join('')}
         ${CC.ui.badge(t.status || 'idea', { tone: 'dim' })}
       </div>
-      ${isCompleted ? '' : `<div class="ui-actions topic-actions-row">
+      ${isCompleted ? '' : `<div class="ui-actions">
         ${CC.ui.button('Draft', { data: { 'topic-draft': t.id } })}
         ${CC.ui.button('Edit', { variant: 'ghost', data: { 'topic-edit': t.id } })}
         ${CC.ui.button('Delete', { variant: 'danger', data: { 'topic-remove': t.id } })}
@@ -116,7 +116,7 @@ CC.views.topics = {
       self._searchTimer = setTimeout(() => {
         // Just re-render the grid
         const topics = self.getFiltered();
-        const grid = document.querySelector('.card-grid');
+        const grid = document.querySelector('.ui-card-grid');
         if (grid) grid.innerHTML = topics.map((t) => self.renderCard(t)).join('') || '';
         self.bindCards();
       }, 200);

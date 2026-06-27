@@ -93,12 +93,12 @@ CC.views.settings = {
           actions: CC.ui.button('Import Voice Profile (.md)', { id: 'vp-import' })
         })}
         ${CC.state.voiceProfiles.map((vp) => `
-          <div class="ui-list-item list-item">
-            <div class="list-item-info">
-              <div class="list-item-title">${CC.escapeHtml(vp.name)} ${vp.isDefault ? CC.ui.badge('default', { tone: 'accent' }) : ''}</div>
-              <div class="list-item-sub">${CC.escapeHtml((vp.identity || '').slice(0, 80))}...</div>
+          <div class="ui-list-item">
+            <div class="ui-list-item-info">
+              <div class="ui-list-item-title">${CC.escapeHtml(vp.name)} ${vp.isDefault ? CC.ui.badge('default', { tone: 'accent' }) : ''}</div>
+              <div class="ui-list-item-sub">${CC.escapeHtml((vp.identity || '').slice(0, 80))}...</div>
             </div>
-            <div class="ui-actions list-item-actions">
+            <div class="ui-actions ui-list-item-actions">
               ${!vp.isDefault ? `<button class="icon-btn" data-vp-remove="${vp.id}">&times;</button>` : ''}
             </div>
           </div>
@@ -110,12 +110,12 @@ CC.views.settings = {
           actions: CC.ui.button('Import Platform Profile (.md)', { id: 'pp-import' })
         })}
         ${CC.state.platformProfiles.map((pp) => `
-          <div class="ui-list-item list-item">
-            <div class="list-item-info">
-              <div class="list-item-title">${CC.escapeHtml(pp.name)} ${pp.isDefault ? CC.ui.badge('default', { tone: 'accent' }) : ''}</div>
-              <div class="list-item-sub">Platforms: ${Object.keys(pp.platforms || {}).join(', ')}</div>
+          <div class="ui-list-item">
+            <div class="ui-list-item-info">
+              <div class="ui-list-item-title">${CC.escapeHtml(pp.name)} ${pp.isDefault ? CC.ui.badge('default', { tone: 'accent' }) : ''}</div>
+              <div class="ui-list-item-sub">Platforms: ${Object.keys(pp.platforms || {}).join(', ')}</div>
             </div>
-            <div class="ui-actions list-item-actions">
+            <div class="ui-actions ui-list-item-actions">
               ${!pp.isDefault ? `<button class="icon-btn" data-pp-remove="${pp.id}">&times;</button>` : ''}
             </div>
           </div>
@@ -174,9 +174,9 @@ CC.views.settings = {
 
   renderModels() {
     const models = CC.state.models || [];
-    return `<div class="mcp-section">
-      <div class="mcp-section-actions ui-actions">${CC.ui.button('+ Add Model', { id: 'model-add' })}</div>
-      <div id="model-form" class="hidden ui-form-panel mcp-form">
+    return `<div class="settings-panel">
+      <div class="settings-panel-actions ui-actions">${CC.ui.button('+ Add Model', { id: 'model-add' })}</div>
+      <div id="model-form" class="hidden ui-form-panel">
         <div class="form-row">
           <div class="form-group">
             <label>Display Name</label>
@@ -228,7 +228,7 @@ CC.views.settings = {
           ${CC.ui.button('Cancel', { id: 'm-cancel', variant: 'ghost' })}
         `)}
       </div>
-      <div class="mcp-list">
+      <div class="settings-card-grid">
         ${models.length === 0 ? CC.empty('No models configured.', 'Add an AI model to start generating content.') : models.map((m) => this.renderModelCard(m)).join('')}
       </div>
       ${models.length > 0 ? this.renderModelChat(models) : ''}
@@ -244,17 +244,17 @@ CC.views.settings = {
     const isDefault = CC.state.settings.defaultModelId === m.id;
     const defaultBadge = isDefault ? CC.ui.badge('Default', { tone: 'accent' }) : '';
 
-    return `<div class="ui-card mcp-card ${isDefault ? 'mcp-card-highlighted' : ''}">
-      <div class="ui-card-header mcp-card-top">
-        <div class="ui-card-title mcp-card-name">${CC.escapeHtml(m.displayName || m.model)} ${statusBadge} ${defaultBadge}</div>
-        <div class="ui-actions ui-card-actions mcp-card-actions">
+    return `<div class="ui-card settings-card ${isDefault ? 'settings-card-highlighted' : ''}">
+      <div class="ui-card-header settings-card-header">
+        <div class="ui-card-title">${CC.escapeHtml(m.displayName || m.model)} ${statusBadge} ${defaultBadge}</div>
+        <div class="ui-actions ui-card-actions">
           ${isDefault ? '' : CC.ui.button('Set Default', { variant: 'ghost', data: { 'model-default': m.id } })}
           ${CC.ui.button('Test', { data: { 'model-test': m.id } })}
           ${CC.ui.button('Edit', { variant: 'ghost', data: { 'model-edit': m.id } })}
           ${CC.ui.button('Remove', { variant: 'ghost', data: { 'model-remove': m.id } })}
         </div>
       </div>
-      <div class="ui-card-meta mcp-card-url">
+      <div class="ui-card-meta settings-card-meta">
         ${CC.escapeHtml(m.provider)} &middot; ${CC.escapeHtml(m.model)} &middot; ${connType}
         ${m.baseUrl ? `<br>${CC.escapeHtml(m.baseUrl)}` : ''}
         ${m.cliPath ? `<br>CLI: ${CC.escapeHtml(m.cliPath)}` : ''}
@@ -514,7 +514,7 @@ CC.views.settings = {
       'psychological-triggers': 'Psychological Triggers'
     };
 
-    let html = `<div class="ui-toolbar toolbar">
+    let html = `<div class="ui-toolbar">
       <input id="fw-search" type="text" placeholder="Search frameworks..." />
       ${CC.ui.badge(`${fws.filter(f => f.active).length} active / ${fws.length} total`, { tone: 'dim' })}
       ${CC.ui.button('+ Add Custom', { id: 'fw-add-custom', variant: 'ghost' })}
@@ -522,12 +522,12 @@ CC.views.settings = {
 
     for (const [cat, items] of Object.entries(cats)) {
       html += CC.ui.sectionTitle(catLabels[cat] || cat, items.length);
-      html += '<div class="card-grid">';
+      html += '<div class="ui-grid ui-card-grid">';
       for (const fw of items) {
-        html += `<div class="ui-card card fw-card ${fw.active ? '' : 'inactive'}" data-fw-id="${fw.id}">
+        html += `<div class="ui-card fw-card ${fw.active ? '' : 'inactive'}" data-fw-id="${fw.id}">
           <div class="ui-card-header fw-card-head">
             <div>
-              <div class="ui-card-title card-title">${CC.escapeHtml(fw.name)}</div>
+              <div class="ui-card-title">${CC.escapeHtml(fw.name)}</div>
               <div class="ui-card-meta fw-category">${CC.escapeHtml(catLabels[cat] || cat)} &middot; Stage ${fw.stage}</div>
             </div>
             <label class="toggle">
@@ -535,7 +535,7 @@ CC.views.settings = {
               <span class="slider"></span>
             </label>
           </div>
-          <div class="card-desc">${CC.escapeHtml(fw.description)}</div>
+          <div class="ui-card-desc">${CC.escapeHtml(fw.description)}</div>
           ${fw.custom ? CC.ui.actions(CC.ui.button('Delete', { variant: 'danger', data: { 'fw-remove': fw.id } }), { className: 'fw-card-actions' }) : ''}
         </div>`;
       }
@@ -585,9 +585,9 @@ CC.views.settings = {
 
   renderMcps() {
     const mcps = CC.state.mcps || [];
-    return `<div class="mcp-section">
-      <div class="mcp-section-actions ui-actions">${CC.ui.button('+ Add MCP', { id: 'mcp-add' })}</div>
-      <div id="mcp-form" class="hidden ui-form-panel mcp-form">
+    return `<div class="settings-panel">
+      <div class="settings-panel-actions ui-actions">${CC.ui.button('+ Add MCP', { id: 'mcp-add' })}</div>
+      <div id="mcp-form" class="hidden ui-form-panel">
         <div class="form-group">
           <label>Name</label>
           <input id="mcp-name" type="text" placeholder="ContentStudio" />
@@ -636,7 +636,7 @@ CC.views.settings = {
           ${CC.ui.button('Cancel', { id: 'mcp-cancel', variant: 'ghost' })}
         `)}
       </div>
-      <div id="mcp-list" class="mcp-list">
+      <div id="mcp-list" class="settings-card-grid">
         ${mcps.length === 0 ? CC.empty('No MCPs connected.', 'Add connections to your CMS, newsletter, analytics, etc.') : mcps.map((m) => this.renderMcpCard(m)).join('')}
       </div>
       ${mcps.length > 0 ? this.renderMcpChat(mcps) : ''}
@@ -651,10 +651,10 @@ CC.views.settings = {
       ? CC.ui.badge('Connected', { tone: 'ok' })
       : CC.ui.badge('Not connected', { tone: 'dim' });
 
-    return `<div class="ui-card mcp-card">
-      <div class="ui-card-header mcp-card-top">
-        <div class="ui-card-title mcp-card-name">${CC.escapeHtml(m.name)} ${statusBadge}</div>
-        <div class="ui-actions ui-card-actions mcp-card-actions">
+    return `<div class="ui-card settings-card">
+      <div class="ui-card-header settings-card-header">
+        <div class="ui-card-title">${CC.escapeHtml(m.name)} ${statusBadge}</div>
+        <div class="ui-actions ui-card-actions">
           ${connected
             ? CC.ui.button('Disconnect', { variant: 'danger', data: { 'mcp-disconnect': m.id } })
             : CC.ui.button('Connect', { data: { 'mcp-connect': m.id } })
@@ -663,7 +663,7 @@ CC.views.settings = {
           ${CC.ui.button('Remove', { variant: 'ghost', data: { 'mcp-remove': m.id } })}
         </div>
       </div>
-      <div class="ui-card-meta mcp-card-url">
+      <div class="ui-card-meta settings-card-meta">
         ${m.transport === 'stdio'
           ? `${CC.escapeHtml(m.command || 'npx')} ${CC.escapeHtml((m.args || []).join(' '))}`
           : `${CC.escapeHtml(m.url)} &middot; ${CC.escapeHtml(m.authType)}`
@@ -671,7 +671,7 @@ CC.views.settings = {
         ${connected ? ` &middot; <span class="metric-ok">${toolCount} tools</span>` : ''}
         ${visibleError ? ` &middot; <span class="metric-danger">${CC.escapeHtml(visibleError)}</span>` : ''}
       </div>
-      ${connected && m.tools && m.tools.length ? CC.ui.tagRow(m.tools.map((t) => CC.ui.badge(t.name, { tone: 'dim', size: 'sm' })).join(''), { className: 'mcp-card-tags' }) : ''}
+      ${connected && m.tools && m.tools.length ? CC.ui.tagRow(m.tools.map((t) => CC.ui.badge(t.name, { tone: 'dim', size: 'sm' })).join(''), { className: 'settings-card-tags' }) : ''}
     </div>`;
   },
 
@@ -1009,7 +1009,7 @@ CC.views.settings = {
 
     const analyzedCount = articles.filter((a) => a.analysis).length;
 
-    return `<div class="mcp-section">
+    return `<div class="settings-panel">
       <div class="ui-actions existing-import-row">
         ${CC.ui.button('Update with MCP', { id: 'existing-sync-mcp' })}
       </div>
@@ -1043,21 +1043,21 @@ CC.views.settings = {
     const hasUrl = !!a.publicUrl;
     const tags = `${tagBadges}${hasAnalytics ? CC.ui.badge('Analytics', { tone: 'ok', size: 'sm' }) : ''}`;
 
-    return `<div class="ui-card mcp-card">
-      <div class="ui-card-header mcp-card-top">
-        <div class="ui-card-title mcp-card-name">${CC.escapeHtml(a.title)}</div>
-        <div class="ui-actions ui-card-actions mcp-card-actions">
+    return `<div class="ui-card settings-card">
+      <div class="ui-card-header settings-card-header">
+        <div class="ui-card-title">${CC.escapeHtml(a.title)}</div>
+        <div class="ui-actions ui-card-actions">
           ${hasAnalytics ? CC.ui.button('Details', { variant: 'ghost', data: { 'existing-details': a.id } }) : ''}
           ${CC.ui.button('View', { data: { 'existing-view': a.id } })}
           ${CC.ui.button('Remove', { variant: 'danger', data: { 'existing-remove': a.id } })}
         </div>
       </div>
       ${dateStr ? `<div class="existing-date">${dateStr}</div>` : ''}
-      <div class="mcp-card-url">
+      <div class="ui-card-meta settings-card-meta">
         ${hasUrl ? `<a href="${CC.escapeHtml(a.publicUrl)}" target="_blank" class="existing-url">${CC.escapeHtml(a.publicUrl)}</a>` : '<span class="existing-no-url">No URL (run Fetch URLs in Utilities)</span>'}
       </div>
       ${summary ? `<div class="existing-summary">${CC.escapeHtml(summary)}</div>` : ''}
-      ${tags ? CC.ui.tagRow(tags, { className: 'mcp-card-tags existing-tags-row' }) : ''}
+      ${tags ? CC.ui.tagRow(tags, { className: 'settings-card-tags existing-tags-row' }) : ''}
       ${this.selectedExistingDetail === a.id && hasAnalytics ? this.renderAnalyticsPanel(a) : ''}
     </div>`;
   },
@@ -1235,7 +1235,7 @@ CC.views.settings = {
       'structural-patterns': 'Structural Patterns'
     };
 
-    let html = `<div class="ui-toolbar toolbar">
+    let html = `<div class="ui-toolbar">
       ${CC.ui.button('+ Add Rule', { id: 'aa-add' })}
       ${CC.ui.badge(`${rules.filter(r => r.active).length} active / ${rules.length} total`, { tone: 'dim' })}
     </div>`;
@@ -1243,12 +1243,12 @@ CC.views.settings = {
     for (const [cat, items] of Object.entries(cats)) {
       html += CC.ui.sectionTitle(catLabels[cat] || cat);
       for (const r of items) {
-        html += `<div class="ui-list-item list-item ${r.active ? '' : 'is-muted'}">
-          <div class="list-item-info">
-            <div class="list-item-title">${CC.escapeHtml(r.rule)}</div>
-            <div class="list-item-sub">${CC.escapeHtml(r.description || '')} ${r.custom ? CC.ui.badge('custom', { tone: 'dim', size: 'sm' }) : ''}</div>
+        html += `<div class="ui-list-item ${r.active ? '' : 'is-muted'}">
+          <div class="ui-list-item-info">
+            <div class="ui-list-item-title">${CC.escapeHtml(r.rule)}</div>
+            <div class="ui-list-item-sub">${CC.escapeHtml(r.description || '')} ${r.custom ? CC.ui.badge('custom', { tone: 'dim', size: 'sm' }) : ''}</div>
           </div>
-          <div class="ui-actions list-item-actions">
+          <div class="ui-actions ui-list-item-actions">
             <label class="toggle">
               <input type="checkbox" data-aa-toggle="${r.id}" ${r.active ? 'checked' : ''} />
               <span class="slider"></span>
