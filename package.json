@@ -1,6 +1,6 @@
 {
   "name": "contentcreator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Create, edit, and organize text content: articles, blog posts, and social posts.",
   "main": "main.js",
   "scripts": {
@@ -18,15 +18,21 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         },
         {
           "target": "dir",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "icon": "build/icon.icns",
