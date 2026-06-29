@@ -1261,12 +1261,19 @@ CC.views.settings = {
       const btn = document.getElementById('existing-sync-mcp');
       btn.disabled = true;
       btn.textContent = 'Syncing...';
+      CC.setStickyStatus(true);
       try {
         const result = await CC.api.existing.syncMcp();
-        CC.showStatus(`Synced: ${result.tagsUpdated} tags updated, ${result.imported} new articles imported`);
+        const queued = [
+          result.autoEnrichment?.summaries?.started ? `${result.autoEnrichment.summaries.count} summaries` : '',
+          result.autoEnrichment?.analytics?.started ? `${result.autoEnrichment.analytics.count} analytics enrichments` : ''
+        ].filter(Boolean);
+        if (!queued.length) CC.setStickyStatus(false);
+        CC.showStatus(`Synced: ${result.tagsUpdated} tags updated, ${result.urlsUpdated || 0} URLs updated, ${result.imported} new articles imported${queued.length ? `. Queued ${queued.join(' and ')}.` : ''}`);
         await CC.refresh('existing');
         CC.navigate('settings');
       } catch (e) {
+        CC.setStickyStatus(false);
         CC.showStatus('Sync failed: ' + e.message);
         btn.disabled = false;
         btn.textContent = 'Update with MCP';

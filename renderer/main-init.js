@@ -79,6 +79,16 @@
     });
   });
 
+  CC.api.onAnalyticsComplete((data) => {
+    CC.setStickyStatus(false);
+    CC.showStatus(`Analytics complete: ${data.done}/${data.total} articles enriched`);
+    CC.refresh('existing').then(() => {
+      if (CC.state.currentView === 'settings') {
+        CC.navigate('settings');
+      }
+    });
+  });
+
   // Navigate to default view
   CC.navigate('settings');
 })();

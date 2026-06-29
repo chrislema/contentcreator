@@ -32,6 +32,7 @@ function logError(source, error) {
 }
 
 const ANALYTICS_ENRICHMENT_VERSION = 2;
+const PUBLIC_SITE_BASE_URL = 'https://chrislema.com';
 let nextBackgroundJobId = 1;
 const backgroundJobs = new Map();
 
@@ -696,14 +697,38 @@ function extractLexicalText(body) {
   return parts.join('').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-ipcMain.handle('existing:syncMcp', async () => {
-  const s = settingsStore.get();
-  const payloadMcp = (s.mcps || []).find((m) => m.connected && m.name && m.name.toLowerCase().includes('payload'));
-  if (!payloadMcp) throw new Error('Payload CMS MCP not connected. Connect it in Settings > MCPs first.');
+function normalizeArticleTitle(title) {
+  return (title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
-  status('Fetching AI-tagged posts from CMS...');
+function cleanPostSlug(slug) {
+  let value = String(slug || '').trim();
+  if (!value) return '';
 
-  // Fetch all AI-tagged posts (paginate)
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      value = new URL(value).pathname;
+    } catch {}
+  }
+
+  return value.replace(/^\/+|\/+$/g, '');
+}
+
+function articleUrlFieldsFromPost(post) {
+  const slug = cleanPostSlug(post?.slug);
+  if (!slug) return {};
+  return {
+    slug,
+    pagePath: `/${slug}`,
+    publicUrl: `${PUBLIC_SITE_BASE_URL}/${slug}`
+  };
+}
+
+function tagsFromPost(post) {
+  return Array.isArray(post?.tags) ? post.tags : [];
+}
+
+async function fetchAiTaggedPosts(payloadMcp) {
   let allPosts = [];
   let page = 1;
   let hasMore = true;
@@ -718,6 +743,103 @@ ipcMain.handle('existing:syncMcp', async () => {
     hasMore = data.hasNextPage;
     page++;
   }
+  return allPosts;
+}
+
+function articleRecordFromPost(post) {
+  const body = extractLexicalText(post.body);
+  return {
+    id: makeId(),
+    title: post.title || 'Untitled',
+    date: post.date || null,
+    tags: tagsFromPost(post),
+    description: post.description || '',
+    excerpt: post.description || (body.slice(0, 300).trim() + (body.length > 300 ? '...' : '')),
+    body,
+    source: post.slug || '',
+    importedAt: new Date().toISOString(),
+    ...articleUrlFieldsFromPost(post)
+  };
+}
+
+function uniqueArticles(articles) {
+  const byId = new Map();
+  for (const article of articles || []) {
+    if (article?.id && !byId.has(article.id)) byId.set(article.id, article);
+  }
+  return [...byId.values()];
+}
+
+function latestArticle(article) {
+  return existingContentStore.get(article.id) || article;
+}
+
+function defaultModel() {
+  const s = settingsStore.get();
+  return (s.models || []).find((m) => m.id === s.defaultModelId) || null;
+}
+
+function connectedMcpByName(pattern) {
+  const s = settingsStore.get();
+  return (s.mcps || []).find((m) => m.connected && m.name && pattern.test(m.name)) || null;
+}
+
+function startAutoEnrichmentForArticles(articles) {
+  const candidates = uniqueArticles(articles).map(latestArticle);
+  const result = {
+    candidates: candidates.length,
+    summaries: { started: false, count: 0, skipped: 0 },
+    analytics: { started: false, count: 0, skipped: 0 }
+  };
+
+  const needingSummaries = candidates.filter((a) => !a.analysis && (a.body || a.excerpt || '').trim());
+  if (needingSummaries.length) {
+    const model = defaultModel();
+    if (!model) {
+      result.summaries = { started: false, count: 0, skipped: needingSummaries.length, reason: 'No default model configured' };
+    } else {
+      try {
+        const job = startBackgroundJob(
+          'existing:analyze',
+          'Article analysis',
+          () => analyzeArticlesInBackground(needingSummaries, model)
+        );
+        result.summaries = { started: true, jobId: job.id, count: needingSummaries.length, skipped: 0 };
+      } catch (e) {
+        result.summaries = { started: false, count: 0, skipped: needingSummaries.length, reason: e.message };
+      }
+    }
+  }
+
+  const analyticsReady = candidates.filter((a) => a.pagePath && (a.tags || []).includes('ai') && needsAnalyticsRefresh(a));
+  if (analyticsReady.length) {
+    const googleMcp = connectedMcpByName(/google/i);
+    if (!googleMcp) {
+      result.analytics = { started: false, count: 0, skipped: analyticsReady.length, reason: 'Google MCP not connected' };
+    } else {
+      try {
+        const job = startBackgroundJob(
+          'existing:enrichAnalytics',
+          'Analytics enrichment',
+          () => enrichAnalyticsInBackground(analyticsReady, googleMcp)
+        );
+        result.analytics = { started: true, jobId: job.id, count: analyticsReady.length, skipped: 0 };
+      } catch (e) {
+        result.analytics = { started: false, count: 0, skipped: analyticsReady.length, reason: e.message };
+      }
+    }
+  }
+
+  return result;
+}
+
+ipcMain.handle('existing:syncMcp', async () => {
+  const s = settingsStore.get();
+  const payloadMcp = (s.mcps || []).find((m) => m.connected && m.name && m.name.toLowerCase().includes('payload'));
+  if (!payloadMcp) throw new Error('Payload CMS MCP not connected. Connect it in Settings > MCPs first.');
+
+  status('Fetching AI-tagged posts from CMS...');
+  const allPosts = await fetchAiTaggedPosts(payloadMcp);
 
   status(`Found ${allPosts.length} AI-tagged posts in CMS. Syncing...`);
 
@@ -725,51 +847,62 @@ ipcMain.handle('existing:syncMcp', async () => {
   const localArticles = existingContentStore.list();
   const titleIndex = {};
   for (const a of localArticles) {
-    const normalized = (a.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ');
+    const normalized = normalizeArticleTitle(a.title);
     if (normalized) titleIndex[normalized] = a;
   }
 
   let tagsUpdated = 0;
+  let urlsUpdated = 0;
   let imported = 0;
+  const enrichmentCandidates = [];
 
   for (const post of allPosts) {
-    const normalizedTitle = (post.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ');
+    const normalizedTitle = normalizeArticleTitle(post.title);
     const match = normalizedTitle ? titleIndex[normalizedTitle] : null;
+    const postTags = tagsFromPost(post);
+    const urlFields = articleUrlFieldsFromPost(post);
 
     if (match) {
-      // Update tags if they differ
+      const patch = {};
+
       const currentTags = JSON.stringify(match.tags || []);
-      const newTags = JSON.stringify(post.tags || []);
+      const newTags = JSON.stringify(postTags);
       if (currentTags !== newTags) {
-        await existingContentStore.add({
-          ...match,
-          tags: post.tags || [],
-          date: post.date || match.date
-        });
+        patch.tags = postTags;
         tagsUpdated++;
       }
+
+      if (post.date && post.date !== match.date) patch.date = post.date;
+      if (urlFields.publicUrl && (!match.slug || !match.pagePath || !match.publicUrl)) {
+        if (!match.slug) patch.slug = urlFields.slug;
+        if (!match.pagePath) patch.pagePath = urlFields.pagePath;
+        if (!match.publicUrl) patch.publicUrl = urlFields.publicUrl;
+        urlsUpdated++;
+      }
+
+      if (Object.keys(patch).length) {
+        const updated = existingContentStore.add({ ...match, ...patch });
+        titleIndex[normalizedTitle] = updated;
+        if (patch.publicUrl || patch.pagePath) enrichmentCandidates.push(updated);
+      }
     } else {
-      // Import new article
-      const body = extractLexicalText(post.body);
-      const record = {
-        id: makeId(),
-        title: post.title || 'Untitled',
-        date: post.date || null,
-        tags: post.tags || [],
-        description: post.description || '',
-        excerpt: post.description || (body.slice(0, 300).trim() + (body.length > 300 ? '...' : '')),
-        body,
-        source: post.slug || '',
-        importedAt: new Date().toISOString()
-      };
+      const record = articleRecordFromPost(post);
       existingContentStore.add(record);
+      if (normalizedTitle) titleIndex[normalizedTitle] = record;
+      enrichmentCandidates.push(record);
       imported++;
     }
   }
 
-  const msg = `Synced: ${tagsUpdated} tags updated, ${imported} new articles imported`;
+  const autoEnrichment = startAutoEnrichmentForArticles(enrichmentCandidates);
+  const queued = [
+    autoEnrichment.summaries.started ? `${autoEnrichment.summaries.count} summaries` : '',
+    autoEnrichment.analytics.started ? `${autoEnrichment.analytics.count} analytics enrichments` : ''
+  ].filter(Boolean);
+
+  const msg = `Synced: ${tagsUpdated} tags updated, ${urlsUpdated} URLs updated, ${imported} new articles imported${queued.length ? `. Queued ${queued.join(' and ')}.` : ''}`;
   status(msg);
-  return { tagsUpdated, imported, total: allPosts.length };
+  return { tagsUpdated, urlsUpdated, imported, total: allPosts.length, autoEnrichment };
 });
 
 // Fetch public URLs for AI-tagged articles via Payload CMS MCP (one-time setup)
@@ -780,49 +913,32 @@ ipcMain.handle('existing:fetchUrls', async () => {
 
   const articles = existingContentStore.list();
   const aiArticles = articles.filter((a) => (a.tags || []).includes('ai'));
-  const needingUrls = aiArticles.filter((a) => !a.publicUrl);
+  const needingUrls = aiArticles.filter((a) => !a.publicUrl || !a.pagePath);
 
   if (needingUrls.length === 0) {
     return { updated: 0, skipped: aiArticles.length, total: aiArticles.length };
   }
 
   status(`Fetching URLs for ${needingUrls.length} articles...`);
-
-  // Fetch all AI-tagged posts from CMS once (paginate)
-  let allPosts = [];
-  let page = 1;
-  let hasMore = true;
-  while (hasMore) {
-    const result = await callTool(payloadMcp, 'find_posts', {
-      limit: 100,
-      page,
-      where: { tags: { contains: 'ai' } }
-    });
-    const data = JSON.parse(result);
-    allPosts = allPosts.concat(data.docs || []);
-    hasMore = data.hasNextPage;
-    page++;
-  }
+  const allPosts = await fetchAiTaggedPosts(payloadMcp);
 
   // Build slug index by normalized title
   const slugIndex = {};
   for (const post of allPosts) {
-    const normalized = (post.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ');
-    if (normalized) slugIndex[normalized] = post.slug || '';
+    const normalized = normalizeArticleTitle(post.title);
+    if (normalized) slugIndex[normalized] = articleUrlFieldsFromPost(post);
   }
 
   let updated = 0;
   let notFound = 0;
 
   for (const article of needingUrls) {
-    const normalized = (article.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ');
-    const slug = slugIndex[normalized];
-    if (slug) {
+    const normalized = normalizeArticleTitle(article.title);
+    const urlFields = slugIndex[normalized];
+    if (urlFields?.publicUrl) {
       existingContentStore.add({
         ...article,
-        slug,
-        pagePath: '/' + slug,
-        publicUrl: 'https://chrislema.com/' + slug
+        ...urlFields
       });
       updated++;
     } else {
@@ -836,8 +952,7 @@ ipcMain.handle('existing:fetchUrls', async () => {
 
 // Enrich articles with analytics data from Google MCP (GA4 + GSC)
 ipcMain.handle('existing:enrichAnalytics', async () => {
-  const s = settingsStore.get();
-  const googleMcp = (s.mcps || []).find((m) => m.connected && /google/i.test(m.name));
+  const googleMcp = connectedMcpByName(/google/i);
   if (!googleMcp) throw new Error('Google MCP not connected. Connect it in Settings > MCPs first.');
 
   const articles = existingContentStore.list();
@@ -975,7 +1090,8 @@ async function enrichAnalyticsInBackground(articles, googleMcp) {
         ? 'failed'
         : analytics.errors.length || analytics.warnings.length ? 'partial' : 'complete';
 
-      existingContentStore.add({ ...article, analytics });
+      const current = existingContentStore.get(article.id);
+      if (current) existingContentStore.add({ ...current, analytics });
       done++;
 
       if (win && !win.isDestroyed()) {
@@ -995,8 +1111,7 @@ async function enrichAnalyticsInBackground(articles, googleMcp) {
 
 // Generate AI analysis summaries for all existing content
 ipcMain.handle('existing:analyze', async () => {
-  const s = settingsStore.get();
-  const model = (s.models || []).find((m) => m.id === s.defaultModelId);
+  const model = defaultModel();
   if (!model) throw new Error('Set a default model in Settings first.');
 
   const articles = existingContentStore.list();
@@ -1035,10 +1150,13 @@ async function analyzeArticlesInBackground(articles, model) {
 
       // Clean and save
       const analysis = response.trim().replace(/^["']|["']$/g, '');
-      existingContentStore.add({
-        ...article,
-        analysis
-      });
+      const current = existingContentStore.get(article.id);
+      if (current) {
+        existingContentStore.add({
+          ...current,
+          analysis
+        });
+      }
       done++;
     } catch (e) {
       logError('existing:analyze:' + article.id, e);
