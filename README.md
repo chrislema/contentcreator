@@ -40,6 +40,13 @@ The app works with any MCP-compliant server. Tested with:
 1. Download the latest `ContentCreator-*-arm64.dmg` from [GitHub Releases](https://github.com/chrislema/contentcreator/releases).
 2. Open the DMG and drag `ContentCreator.app` into `/Applications`.
 3. On first launch, macOS may warn that the app is from an unidentified developer. Right-click `ContentCreator.app`, choose **Open**, then confirm.
+4. Because the app is not signed/notarized by Apple, macOS may instead say **"ContentCreator is damaged and can't be opened. You should move it to the Trash."** This is not a real corruption — it's Gatekeeper blocking the unsigned download. Clear the quarantine flag by running this once in Terminal, then open the app normally:
+
+   ```bash
+   xattr -cr /Applications/ContentCreator.app
+   ```
+
+   You'll need to re-run this command after each update you download and install.
 
 ### Development Setup
 
