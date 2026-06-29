@@ -8,19 +8,22 @@ ContentCreator brings together the pieces a content creator needs into one workf
 
 1. **Topics** - Rank and manage content ideas using a multi-source intelligence engine that combines Google Search Console data, Google Analytics, existing content, and audience segments. Each topic is scored on five criteria and distributed across audience segments to avoid overlap.
 
-2. **Drafts** - Write articles with AI models through a chat interface. Supports multiple models (OpenAI-compatible, Anthropic, Claude Code CLI), voice profiles, audience targeting, and content frameworks. A smart article extractor picks the right version from the conversation and strips chatter.
+2. **Research** - Turn peer-reviewed journal PDFs into evidence-backed content ideas. Import one or more PDFs and each becomes its own idea card: the model extracts the paper's real finding (not just the abstract), translates it into a practical angle, captures the "aha," preserves caveats so you don't overclaim, and pulls citation metadata (title, authors, journal, DOI) straight from the PDF text. Cards are scored against the same five-criteria rubric as Topics and can be sent to Drafts in one click.
 
-3. **Distributions** - Push finished articles to your website (via Payload CMS MCP), email newsletter (via Kit MCP), and social media (via ContentStudio MCP). Each platform gets its own chat panel where you instruct the model, it calls the MCP tools directly, and you review before anything goes live.
+3. **Drafts** - Write articles with AI models through a chat interface. Supports multiple models (OpenAI-compatible, Anthropic, Claude Code CLI), voice profiles, audience targeting, and content frameworks. A smart article extractor picks the right version from the conversation and strips chatter.
 
-4. **Audiences** - Define micro-segments with goal pyramids, pain pyramids, four forces analysis, and hiring moments so every piece of content targets a specific reader.
+4. **Distributions** - Push finished articles to your website (via Payload CMS MCP), email newsletter (via Kit MCP), and social media (via ContentStudio MCP). Each platform gets its own chat panel where you instruct the model, it calls the MCP tools directly, and you review before anything goes live.
 
-5. **Existing Content** - Import and analyze your content library (75+ articles) to prevent topic overlap and give the model context on what you've already written.
+5. **Audiences** - Define micro-segments with goal pyramids, pain pyramids, four forces analysis, and hiring moments so every piece of content targets a specific reader.
+
+6. **Existing Content** - Import and analyze your content library (75+ articles) to prevent topic overlap and give the model context on what you've already written.
 
 ## Key Features
 
 - **Multi-model support**: OpenAI-compatible APIs (GPT, GLM), Anthropic, and Claude Code CLI with permission-bypassed tool access
 - **MCP integration**: HTTP (with OAuth 2.1), SSE, and stdio transports. Register any MCP and let the model use it during chat
 - **Topic intelligence**: 5-criteria ranking rubric, distribution rules across segments, deduplication against existing content
+- **Research-to-content**: import journal PDFs, extract findings and citations, score evidence-backed ideas, and draft them directly
 - **Model-driven summaries**: Generated once at mark-ready time, reusable across distribution cards, CMS push, and content library
 - **Bring-your-own tools**: No hardcoded integrations. Each user registers their own models, MCPs, voice profiles, and frameworks
 
@@ -73,7 +76,8 @@ The unsigned `.dmg`, `.zip`, and `.app` directory are written to `release/`.
 4. **Settings > Profile** - Set your [voice profile](https://yourvoiceprofile.com) and [platform profiles](https://yourplatformprofile.com).
 5. **Audiences** - Define your [micro-segments](https://youraudiencesegments.com).
 6. **Topics > Generate** - Run the topic intelligence engine.
-7. **Drafts** - Write, mark ready, distribute.
+7. **Research > Import PDFs** - (Optional) Turn journal PDFs into evidence-backed idea cards.
+8. **Drafts** - Write, mark ready, distribute.
 
 ## Architecture
 
@@ -85,6 +89,7 @@ lib/
   mcpClient.js       - MCP client (HTTP + stdio transports)
   mcpOAuth.js        - OAuth 2.1 flow (PKCE, dynamic registration, token refresh)
   topicIntelligence.js - Multi-source ranking + distribution rules
+  researchIntelligence.js - Journal PDF analysis prompt + citation extraction
   contextFiles.js    - Voice/audience/framework context files for CLI models
   store.js           - JSON file-based data store
 renderer/
