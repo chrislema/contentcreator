@@ -943,11 +943,14 @@ CC.views.settings = {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         btn.textContent = 'Connecting...';
+        CC.setStickyStatus(true);
         try {
           await CC.api.mcps.connect(btn.dataset.mcpConnect);
+          CC.setStickyStatus(false);
           await CC.refresh('mcps');
           CC.navigate('settings');
         } catch (e) {
+          CC.setStickyStatus(false);
           CC.showStatus('Connection failed: ' + e.message);
           await CC.refresh('mcps');
           CC.navigate('settings');
