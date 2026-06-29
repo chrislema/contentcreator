@@ -69,9 +69,9 @@ The unsigned `.dmg`, `.zip`, and `.app` directory are written to `release/`.
 
 1. **Settings > Models** - Add your AI models (API key or CLI path). Set a default model.
 2. **Settings > MCPs** - Register your CMS, email, and social media MCPs.
-3. **Settings > Frameworks** - Add or import content frameworks.
-4. **Settings > Profile** - Set your voice profile and platform profiles.
-5. **Audiences** - Define your micro-segments.
+3. **Settings > Frameworks** - Add or import [content frameworks](https://yourcontentagent.com).
+4. **Settings > Profile** - Set your [voice profile](https://yourvoiceprofile.com) and [platform profiles](https://yourplatformprofile.com).
+5. **Audiences** - Define your [micro-segments](https://youraudiencesegments.com).
 6. **Topics > Generate** - Run the topic intelligence engine.
 7. **Drafts** - Write, mark ready, distribute.
 
